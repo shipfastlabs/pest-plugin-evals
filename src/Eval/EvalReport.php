@@ -60,27 +60,9 @@ final class EvalReport
         $avgScore = number_format($this->avgScore(), 2);
         $totalCost = $this->totalCost();
 
-        $lines = [''];
-
-        foreach ($this->entries as $entry) {
-            $agent = $entry['agent'];
-            $result = $entry['result'];
-            $icon = $result->passed ? '<fg=green>✓</>' : '<fg=red>✗</>';
-
-            $scorerParts = [];
-            foreach ($result->scoresByScorer() as $scorer => $score) {
-                $scorerName = class_basename($scorer);
-                $formatted = number_format($score, 2);
-                $color = $score >= $result->threshold ? 'green' : 'red';
-                $scorerParts[] = "<fg={$color}>{$scorerName} {$formatted}</>";
-            }
-
-            $lines[] = "  {$icon} <fg=white>{$agent}</>  ".implode('  ', $scorerParts);
-        }
-
-        $lines[] = '';
-
         $passColor = $passed === $total ? 'green' : 'yellow';
+
+        $lines = [''];
         $lines[] = "  <fg={$passColor};options=bold>{$passed}/{$total} evals passed</>  <fg=gray>avg score {$avgScore}</>";
 
         if ($totalCost->totalTokens() > 0) {
