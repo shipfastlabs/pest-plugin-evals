@@ -1,0 +1,26 @@
+<?php
+
+use App\Agents\{{ name }};
+use function ShipFastLabs\PestEval\evaluate;
+use ShipFastLabs\PestEval\Scorers\LlmJudge;
+
+describe('{{ name }}', function () {
+    it('responds accurately to user queries', function () {
+        evaluate({{ name }}::class)
+            ->withPrompt('Your test prompt here')
+            ->score(LlmJudge::class, criteria: 'Response is accurate, helpful, and professional')
+            ->threshold(0.8)
+            ->assert();
+    });
+
+    it('handles edge cases gracefully', function (string $prompt, string $criteria) {
+        evaluate({{ name }}::class)
+            ->withPrompt($prompt)
+            ->score(LlmJudge::class, criteria: $criteria)
+            ->threshold(0.7)
+            ->assert();
+    })->with([
+        ['edge case prompt 1', 'Expected behavior criteria 1'],
+        ['edge case prompt 2', 'Expected behavior criteria 2'],
+    ]);
+});

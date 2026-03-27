@@ -1,0 +1,9 @@
+{
+    "preset": "psr12",
+    "exclude": [
+        "src/Config"
+    ],
+    "rules": {
+        "Pint/phpdoc_type_annotations_only": true
+    }
+}
