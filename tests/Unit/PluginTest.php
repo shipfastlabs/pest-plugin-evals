@@ -2,8 +2,12 @@
 
 declare(strict_types=1);
 
-use ShipFastLabs\PestEval\Plugin;
 use ShipFastLabs\PestEval\Eval\EvalReport;
+use ShipFastLabs\PestEval\Plugin;
+
+beforeEach(function (): void {
+    Plugin::$evalMode = false;
+});
 
 describe('Plugin --eval handling', function (): void {
     it('falls back to the eval group when tests/Evals is absent', function (): void {
@@ -11,7 +15,8 @@ describe('Plugin --eval handling', function (): void {
             EvalReport::flush();
             $plugin = new Plugin();
 
-            expect($plugin->handleArguments(['--eval']))->toBe(['--group=eval']);
+            expect($plugin->handleArguments(['vendor/bin/pest', '--eval']))
+                ->toBe(['vendor/bin/pest', '--group=eval']);
             expect($plugin->addOutput(0))->toBe(0);
         });
     });
@@ -23,25 +28,9 @@ describe('Plugin --eval handling', function (): void {
             EvalReport::flush();
             $plugin = new Plugin();
 
-            expect($plugin->handleArguments(['--eval']))->toBe(['tests/Evals']);
+            expect($plugin->handleArguments(['vendor/bin/pest', '--eval']))
+                ->toBe(['vendor/bin/pest', 'tests/Evals']);
             expect($plugin->addOutput(0))->toBe(0);
-        });
-    });
-
-    it('excludes the eval group when --eval is not passed', function (): void {
-        withTemporaryWorkingDirectory(function (): void {
-            $plugin = new Plugin();
-
-            expect($plugin->handleArguments([]))->toBe(['--exclude-group=eval']);
-        });
-    });
-
-    it('does not add --exclude-group=eval when already present', function (): void {
-        withTemporaryWorkingDirectory(function (): void {
-            $plugin = new Plugin();
-
-            expect($plugin->handleArguments(['--exclude-group=eval']))
-                ->toBe(['--exclude-group=eval']);
         });
     });
 
@@ -52,9 +41,38 @@ describe('Plugin --eval handling', function (): void {
             EvalReport::flush();
             $plugin = new Plugin();
 
-            expect($plugin->handleArguments(['--eval', 'tests/Feature/ExampleTest.php']))
-                ->toBe(['tests/Feature/ExampleTest.php', '--group=eval']);
+            expect($plugin->handleArguments(['vendor/bin/pest', '--eval', 'tests/Feature/ExampleTest.php']))
+                ->toBe(['vendor/bin/pest', 'tests/Feature/ExampleTest.php', '--group=eval']);
             expect($plugin->addOutput(0))->toBe(0);
+        });
+    });
+
+    it('sets eval mode when --eval is passed', function (): void {
+        withTemporaryWorkingDirectory(function (): void {
+            $plugin = new Plugin();
+
+            $plugin->handleArguments(['vendor/bin/pest', '--eval']);
+
+            expect(Plugin::$evalMode)->toBeTrue();
+        });
+    });
+
+    it('does not set eval mode when --eval is not passed', function (): void {
+        withTemporaryWorkingDirectory(function (): void {
+            $plugin = new Plugin();
+
+            $plugin->handleArguments(['vendor/bin/pest']);
+
+            expect(Plugin::$evalMode)->toBeFalse();
+        });
+    });
+
+    it('passes arguments through unchanged when --eval is not present', function (): void {
+        withTemporaryWorkingDirectory(function (): void {
+            $plugin = new Plugin();
+
+            expect($plugin->handleArguments(['vendor/bin/pest', '--filter=something']))
+                ->toBe(['vendor/bin/pest', '--filter=something']);
         });
     });
 });
@@ -74,6 +92,7 @@ function withTemporaryWorkingDirectory(callable $callback): void
         $callback($temporaryDirectory);
     } finally {
         chdir($originalDirectory);
+        Plugin::$evalMode = false;
 
         if (is_dir("{$temporaryDirectory}/tests/Evals")) {
             rmdir("{$temporaryDirectory}/tests/Evals");

@@ -5,15 +5,25 @@ declare(strict_types=1);
 namespace ShipFastLabs\PestEval;
 
 use Pest\Contracts\Plugins\AddsOutput;
+use Pest\Contracts\Plugins\Bootable;
 use Pest\Contracts\Plugins\HandlesArguments;
+use Pest\TestSuite;
 use ShipFastLabs\PestEval\Eval\EvalReport;
+use ShipFastLabs\PestEval\Filters\ExcludesEvalTestCaseMethodFilter;
 
 /**
  * @internal
  */
-final class Plugin implements AddsOutput, HandlesArguments
+final class Plugin implements AddsOutput, Bootable, HandlesArguments
 {
-    private static bool $evalMode = false;
+    public static bool $evalMode = false;
+
+    public function boot(): void
+    {
+        TestSuite::getInstance()
+            ->tests
+            ->addTestCaseMethodFilter(new ExcludesEvalTestCaseMethodFilter());
+    }
 
     public function handleArguments(array $arguments): array
     {
@@ -34,10 +44,6 @@ final class Plugin implements AddsOutput, HandlesArguments
             }
 
             return $filtered;
-        }
-
-        if (! $this->hasExcludeGroupArgument($arguments)) {
-            $arguments[] = '--exclude-group=eval';
         }
 
         return $arguments;
@@ -74,22 +80,8 @@ final class Plugin implements AddsOutput, HandlesArguments
      */
     private function hasPathArgument(array $arguments): bool
     {
-        foreach ($arguments as $argument) {
+        foreach (array_slice($arguments, 1) as $argument) {
             if ($argument !== '' && ! str_starts_with($argument, '-')) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * @param  array<int, string>  $arguments
-     */
-    private function hasExcludeGroupArgument(array $arguments): bool
-    {
-        foreach ($arguments as $argument) {
-            if (str_starts_with($argument, '--exclude-group')) {
                 return true;
             }
         }
