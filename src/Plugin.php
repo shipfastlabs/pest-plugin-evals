@@ -29,6 +29,9 @@ final class Plugin implements AddsOutput, Bootable, HandlesArguments
     {
         if (in_array('--eval', $arguments, true)) {
             self::$evalMode = true;
+            $_SERVER['PEST_EVAL_MODE'] = '1';
+            $_ENV['PEST_EVAL_MODE'] = '1';
+            putenv('PEST_EVAL_MODE=1');
 
             /** @var list<string> $filtered */
             $filtered = array_values(array_filter($arguments, fn (string $arg): bool => $arg !== '--eval'));
