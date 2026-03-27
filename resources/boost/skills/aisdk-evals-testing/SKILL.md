@@ -1,6 +1,6 @@
 ---
 name: aisdk-evals-testing
-description: "Write evaluation tests for Laravel AI SDK agents using pest-plugin-evals. Use this skill whenever the user wants to evaluate AI agents, write eval tests, use LLM-as-judge scoring, semantic similarity, tool/agent validation, or run evals with PestPHP. Triggers on: expectAgent(), toBeRelevant, toBeSafe, toBeFactual, toPassJudge, toBeSemanticallySimilar, toHaveToolCalls, toFollowTrajectory, LlmJudge, Factuality, Relevance, Safety, SemanticSimilarity, ToolCallMatch, AgentTrajectory, pest --eval, make:eval, make:scorer, or any mention of AI agent evaluation/testing."
+description: "Write evaluation tests for Laravel AI SDK agents using pest-plugin-evals. Use this skill whenever the user wants to evaluate AI agents, write eval tests, use LLM-as-judge scoring, semantic similarity, tool/agent validation, or run evals with PestPHP. Triggers on: expectAgent(), toBeRelevant, toBeSafe, toBeFactual, toPassJudge, toBeSimilar, toHaveToolCalls, toFollowTrajectory, LlmJudge, Factuality, Relevance, Safety, SemanticSimilarity, ToolCallMatch, AgentTrajectory, pest --eval, make:eval, make:scorer, or any mention of AI agent evaluation/testing."
 ---
 
 # Writing Evals with Pest Plugin Eval
@@ -57,7 +57,7 @@ For multiple runs: `expectAgent(Agent::class, 'prompt', runs: 5)` — every asse
 - `->toBeFactual(0.7, expected: 'reference')` — fact-check against reference
 
 **Semantic comparison:**
-- `->toBeSemanticallySimilar('reference', 0.7)` — cosine similarity between embeddings
+- `->toBeSimilar('reference', 0.7)` — cosine similarity between embeddings
 
 **Agent tool validation:**
 - `->toHaveToolCalls([...])` — validate expected tool calls and arguments
@@ -95,9 +95,9 @@ Score: 0.0-1.0. Checks for harmful, toxic, or unsafe content. 1.0 = completely s
 
 ### Semantic
 
-toBeSemanticallySimilar — requires `expected` reference
+toBeSimilar — requires `expected` reference
 ```php
-->toBeSemanticallySimilar('5 to 7 business days', threshold: 0.7)
+->toBeSimilar('5 to 7 business days', threshold: 0.7)
 ```
 Score: 0.0-1.0 (cosine similarity between embeddings).
 
@@ -261,40 +261,28 @@ The `score()` method receives:
 
 Return a `ScorerResult` with a `score` between `0.0` (fail) and `1.0` (pass).
 
-### 2. Register as a Pest expectation
+### 2. Use in eval tests
 
-Add a custom expectation in `tests/Pest.php` (or `tests/Expectations.php`):
+Pass the scorer instance directly to `->toPassScorer()`:
 
 ```php
 use App\Scorers\ToneScorer;
-use Pest\Expectation;
-use function ShipFastLabs\PestEval\assertScorerResult;
 
-expect()->extend('toHaveTone', function (string $tone, float $threshold = 0.7): Expectation {
-    assertScorerResult(new ToneScorer($tone), $this->value, $threshold);
-
-    return $this;
-});
-```
-
-`assertScorerResult()` handles context resolution, scoring, reporting to `EvalReport`, and asserting the score meets the threshold.
-
-### 3. Use in eval tests
-
-```php
 it('responds professionally', function () {
     expectAgent(SupportAgent::class, 'I want a refund')
         ->toContain('refund')
-        ->toHaveTone('professional', threshold: 0.8)
+        ->toPassScorer(new ToneScorer('professional'), threshold: 0.8)
         ->toBeSafe();
 })->group('eval');
 ```
+
+`toPassScorer()` works with any class that implements the `Scorer` interface — no need to register a custom expectation.
 
 ## Common Pitfalls
 
 - Always add `->group('eval')` so `pest --eval` picks up your tests
 - `toPassJudge` needs specific `criteria:` — be clear about what "good" looks like
-- `toBeFactual` and `toBeSemanticallySimilar` need an `expected:` reference string
+- `toBeFactual` and `toBeSimilar` need an `expected:` reference string
 - `toHaveToolCalls` and `toFollowTrajectory` expect JSON-formatted tool calls in the output
 - Agent classes must have a `prompt()` method (Laravel AI SDK agent contract)
 - The config path is `eval.ai.scoring.*` (not `eval.judge.*`)

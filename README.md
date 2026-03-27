@@ -64,6 +64,20 @@ expectAgent(MyAgent::class, 'What is the capital of France?')
 
 ## Usage Examples
 
+### Combining deterministic and LLM scoring
+
+Native Pest expectations and LLM scorers chain freely in the same assertion:
+
+```php
+it('writes a good tweet about Laravel', function () {
+    expectAgent(CopyWriter::class, 'Write a tweet about Laravel')
+        ->toContain('Laravel')                                          // deterministic
+        ->toMatch('/^.{1,280}$/s')                                      // deterministic: max 280 chars
+        ->toPassJudge('The tone is enthusiastic and engaging')           // LLM judge
+        ->toBeSafe();                                                   // LLM safety
+})->group('eval');
+```
+
 ### Native Pest expectations on agent output
 
 ```php
@@ -125,7 +139,7 @@ it('answers factually', function () {
 ```php
 it('response is semantically similar to reference', function () {
     expectAgent(GreetingAgent::class, 'My name is Dana.')
-        ->toBeSemanticallySimilar('Hello Dana! Nice to meet you.', threshold: 0.7);
+        ->toBeSimilar('Hello Dana! Nice to meet you.', threshold: 0.7);
 })->group('eval');
 ```
 
@@ -152,6 +166,40 @@ it('returns valid JSON with required fields', function () {
         fake: ['{"refund_window": 30, "currency": "USD"}'],
     )->toBeJson()
         ->json()->toHaveKeys(['refund_window', 'currency']);
+})->group('eval');
+```
+
+### Structured data extraction
+
+```php
+it('extracts contact info from a business card', function () {
+    expectAgent(BusinessCardReader::class, 'Extract the contact details from this image', attachments: [
+        Image::fromStorage('card.png'),
+    ])->json()->toBe([
+        'name'    => 'John Smith',
+        'title'   => 'CEO',
+        'company' => 'Acme Corp',
+        'email'   => 'john@acme.com',
+    ]);
+})->group('eval');
+```
+
+### With attachments
+
+```php
+use Laravel\AI\Files\Document;
+use Laravel\AI\Files\Image;
+
+it('analyzes uploaded documents', function () {
+    expectAgent(
+        DocumentAnalyzer::class,
+        'Summarize this contract',
+        attachments: [
+            Document::fromStorage('contracts/agreement.pdf'),
+            Image::fromStorage('screenshot.png'),
+        ],
+    )->toContain('agreement')
+        ->toBeRelevant(0.8);
 })->group('eval');
 ```
 
@@ -218,9 +266,10 @@ it('validates a pre-computed response', function () {
 | `->toBeSafe(0.7)` | Evaluates for harmful content | `Safety` |
 | `->toBeFactual(0.7, expected: '...')` | Fact-checks against reference | `Factuality` |
 | `->toPassJudge('criteria', 0.7)` | Custom LLM evaluation | `LlmJudge` |
-| `->toBeSemanticallySimilar('ref', 0.7)` | Embedding cosine similarity | `SemanticSimilarity` |
+| `->toBeSimilar('ref', 0.7)` | Embedding cosine similarity | `SemanticSimilarity` |
 | `->toHaveToolCalls([...])` | Validates tool calls/arguments | `ToolCallMatch` |
 | `->toFollowTrajectory([...])` | Validates tool call sequence | `AgentTrajectory` |
+| `->toPassScorer($scorer, 0.7)` | Use any custom `Scorer` instance | Any |
 
 All thresholds default to `0.7` and represent the minimum score (0.0-1.0) required to pass.
 
@@ -244,6 +293,7 @@ expectAgent(
     string $prompt,          // The input prompt
     int $runs = 1,           // Number of runs (each assertion checked on every output)
     array $fake = [],        // Fake responses (bypasses agent execution)
+    array $attachments = [], // Files to pass to the agent (Document, Image)
 ): mixed
 ```
 
@@ -317,34 +367,22 @@ The `score()` method receives:
 
 Return a `ScorerResult` with a `score` between `0.0` (fail) and `1.0` (pass).
 
-### 2. Register as a Pest expectation
+### 2. Use in eval tests
 
-Add a custom expectation in `tests/Pest.php` (or `tests/Expectations.php`):
+Pass the scorer instance directly to `->toPassScorer()`:
 
 ```php
 use App\Scorers\ToneScorer;
-use Pest\Expectation;
-use function ShipFastLabs\PestEval\assertScorerResult;
 
-expect()->extend('toHaveTone', function (string $tone, float $threshold = 0.7): Expectation {
-    assertScorerResult(new ToneScorer($tone), $this->value, $threshold);
-
-    return $this;
-});
-```
-
-`assertScorerResult()` handles context resolution, scoring, reporting to `EvalReport`, and asserting the score meets the threshold.
-
-### 3. Use in eval tests
-
-```php
 it('responds professionally', function () {
     expectAgent(SupportAgent::class, 'I want a refund')
         ->toContain('refund')
-        ->toHaveTone('professional', threshold: 0.8)
+        ->toPassScorer(new ToneScorer('professional'), threshold: 0.8)
         ->toBeSafe();
 })->group('eval');
 ```
+
+`toPassScorer()` works with any class that implements the `Scorer` interface — no need to register a custom expectation.
 ## Contributing
 
 Please see [CONTRIBUTING](CONTRIBUTING.md) for details on how to contribute, including adding support for new agents.

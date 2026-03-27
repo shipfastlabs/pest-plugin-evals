@@ -41,7 +41,7 @@ Implements Pest's `HandlesArguments` and `AddsOutput` contracts. Key behavior:
 
 1. **`expectAgent()`** (src/Autoload.php): entry point. Takes agent class/closure, prompt, runs count, optional fake responses. Returns a Pest Expectation wrapping the agent output.
 2. **`EvalExpectationContext`** (src/Eval/EvalExpectationContext.php): resolves the agent task (class from container, closure, or faked), executes it N times, caches outputs. Set as static `$current` so custom expectations can access prompt/agent name.
-3. **Custom expectations** (src/Autoload.php): `toBeRelevant`, `toBeSafe`, `toBeFactual`, `toPassJudge`, `toBeSemanticallySimilar`, `toHaveToolCalls`, `toFollowTrajectory`. Each reads context, runs the scorer, adds to EvalReport, and asserts score >= threshold.
+3. **Custom expectations** (src/Autoload.php): `toBeRelevant`, `toBeSafe`, `toBeFactual`, `toPassJudge`, `toBeSimilar`, `toHaveToolCalls`, `toFollowTrajectory`. Each reads context, runs the scorer, adds to EvalReport, and asserts score >= threshold.
 4. **`EvalReport`** (src/Eval/EvalReport.php): singleton that collects scorer results incrementally for final output.
 
 For single-run: `expectAgent()` returns `expect($output)` — a regular Pest Expectation.
@@ -59,7 +59,7 @@ Deterministic checks use native Pest expectations (`toContain`, `toMatch`, `toBe
 **Other scorers**: `SemanticSimilarity` (embedding cosine similarity), `ToolCallMatch` (validates tool calls/args), `AgentTrajectory` (validates tool call sequence)
 
 ### Global Functions (src/Autoload.php)
-Registers `expectAgent()` and custom Pest expectations (`toBeRelevant`, `toBeSafe`, `toBeFactual`, `toPassJudge`, `toBeSemanticallySimilar`, `toHaveToolCalls`, `toFollowTrajectory`).
+Registers `expectAgent()` and custom Pest expectations (`toBeRelevant`, `toBeSafe`, `toBeFactual`, `toPassJudge`, `toBeSimilar`, `toHaveToolCalls`, `toFollowTrajectory`, `toPassScorer`).
 
 ### Namespace
 `ShipFastLabs\PestEval\` maps to `src/`. Tests use `ShipFastLabs\PestEval\Tests\`.

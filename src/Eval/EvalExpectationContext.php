@@ -23,12 +23,14 @@ final class EvalExpectationContext
 
     /**
      * @param  list<string>  $fakedResponses
+     * @param  list<mixed>  $attachments
      */
     public function __construct(
         public readonly string $prompt,
         public readonly string $agentName,
         public readonly int $runs = 1,
         public readonly array $fakedResponses = [],
+        public readonly array $attachments = [],
     ) {
     }
 
@@ -69,10 +71,12 @@ final class EvalExpectationContext
             };
         }
 
-        return function (string $input) use ($agent): string {
+        $attachments = $this->attachments;
+
+        return function (string $input) use ($agent, $attachments): string {
             $instance = Container::getInstance()->make($agent);
 
-            return (string) $instance->prompt($input); // @phpstan-ignore method.nonObject, cast.string
+            return (string) $instance->prompt($input, $attachments); // @phpstan-ignore method.nonObject, cast.string
         };
     }
 }

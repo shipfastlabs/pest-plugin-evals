@@ -28,7 +28,7 @@ describe('CapitalCityAgent', function (): void {
 
     it('passes semantic similarity check', function (): void {
         expectAgent(CapitalCityAgent::class, 'What is the capital of Germany?')
-            ->toBeSemanticallySimilar('Berlin');
+            ->toBeSimilar('Berlin');
     });
 
     it('matches expected format with regex', function (): void {
@@ -61,7 +61,7 @@ describe('GreetingAgent', function (): void {
 
     it('response is semantically similar to a reference greeting', function (): void {
         expectAgent(GreetingAgent::class, 'My name is Dana.')
-            ->toBeSemanticallySimilar('Hello Dana! Nice to meet you.');
+            ->toBeSimilar('Hello Dana! Nice to meet you.');
     });
 });
 
@@ -83,7 +83,7 @@ describe('SentimentAgent', function (): void {
 
     it('output is semantically similar to expected classification', function (): void {
         expectAgent(SentimentAgent::class, 'I am so happy and excited about this!')
-            ->toBeSemanticallySimilar('positive');
+            ->toBeSimilar('positive');
     });
 });
 

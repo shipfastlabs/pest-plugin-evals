@@ -19,18 +19,21 @@ use ShipFastLabs\PestEval\Scorers\ToolCallMatch;
 
 /**
  * @param  list<string>  $fake
+ * @param  list<mixed>  $attachments
  */
 function expectAgent(
     string|Closure $agent,
     string $prompt,
     int $runs = 1,
     array $fake = [],
+    array $attachments = [],
 ): mixed {
     $ctx = new EvalExpectationContext(
         prompt: $prompt,
         agentName: is_string($agent) ? class_basename($agent) : 'Task',
         runs: $runs,
         fakedResponses: $fake,
+        attachments: $attachments,
     );
 
     EvalExpectationContext::$current = $ctx;
@@ -92,7 +95,7 @@ expect()->extend('toPassJudge', function (string $criteria, float $threshold = 0
     return $this;
 });
 
-expect()->extend('toBeSemanticallySimilar', function (string $expected, float $threshold = 0.7): Expectation {
+expect()->extend('toBeSimilar', function (string $expected, float $threshold = 0.7): Expectation {
     /** @var Expectation<string> $this */
     assertScorerResult(new SemanticSimilarity(), $this->value, $threshold, $expected);
 
@@ -117,6 +120,13 @@ expect()->extend('toFollowTrajectory', function (array $steps, float $threshold 
     /** @var Expectation<string> $this */
     /** @var list<string> $steps */
     assertScorerResult(new AgentTrajectory(sequence: $steps, strictOrder: $strictOrder), $this->value, $threshold);
+
+    return $this;
+});
+
+expect()->extend('toPassScorer', function (Scorer $scorer, float $threshold = 0.7, ?string $expected = null): Expectation {
+    /** @var Expectation<string> $this */
+    assertScorerResult($scorer, $this->value, $threshold, $expected);
 
     return $this;
 });
