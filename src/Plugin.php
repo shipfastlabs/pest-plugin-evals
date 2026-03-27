@@ -25,22 +25,6 @@ final class Plugin implements AddsOutput, Bootable, HandlesArguments
         TestSuite::getInstance()
             ->tests
             ->addTestCaseMethodFilter(new ExcludesEvalTestCaseMethodFilter());
-
-        pest()->afterEach(function (): void {
-            $report = EvalReport::instance();
-            $newLines = $report->renderNewEntries();
-
-            if ($newLines === []) {
-                return;
-            }
-
-            /** @var OutputInterface $output */
-            $output = Container::getInstance()->get(OutputInterface::class);
-
-            foreach ($newLines as $line) {
-                $output->writeln($line);
-            }
-        })->in($this->in());
     }
 
     public function handleArguments(array $arguments): array
@@ -72,7 +56,7 @@ final class Plugin implements AddsOutput, Bootable, HandlesArguments
 
     public function addOutput(int $exitCode): int
     {
-        if (self::$evalMode) {
+        if (self::$evalMode || ($_SERVER['PEST_EVAL_MODE'] ?? $_ENV['PEST_EVAL_MODE'] ?? null) === '1') {
             $report = EvalReport::instance();
 
             if ($report->totalEvals() > 0) {
@@ -124,10 +108,5 @@ final class Plugin implements AddsOutput, Bootable, HandlesArguments
         }
 
         return false;
-    }
-
-    private function in(): string
-    {
-        return TestSuite::getInstance()->rootPath.DIRECTORY_SEPARATOR.TestSuite::getInstance()->testPath;
     }
 }

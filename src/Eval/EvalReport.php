@@ -11,8 +11,6 @@ final class EvalReport
     /** @var list<array{agent: string, result: EvalResult}> */
     private array $entries = [];
 
-    private int $renderedCount = 0;
-
     public static function instance(): self
     {
         return self::$instance ??= new self();
@@ -51,123 +49,42 @@ final class EvalReport
         );
     }
 
-    /**
-     * @return list<string>
-     */
-    public function renderNewEntries(): array
-    {
-        $lines = [];
-        $total = count($this->entries);
-
-        for ($i = $this->renderedCount; $i < $total; $i++) {
-            $entry = $this->entries[$i];
-            $lines = [...$lines, ...$this->renderEntry($entry['agent'], $entry['result'])];
-        }
-
-        $this->renderedCount = count($this->entries);
-
-        return $lines;
-    }
-
-    /**
-     * @return list<string>
-     */
-    private function renderEntry(string $agent, EvalResult $result): array
-    {
-        $lines = [];
-
-        foreach ($result->scoresByScorer() as $scorer => $avgScore) {
-            $scorerName = class_basename($scorer);
-            $passed = $avgScore >= $result->threshold;
-            $icon = $passed ? '<fg=green>✓</>' : '<fg=red>✗</>';
-            $scoreFormatted = number_format($avgScore, 2);
-
-            $lines[] = "  {$icon} <fg=gray>{$agent}</> → {$scorerName}: <fg=white>{$scoreFormatted}</>";
-            $agent = str_repeat(' ', mb_strlen($agent));
-        }
-
-        return $lines;
-    }
-
     public function renderSummary(): string
     {
         if ($this->entries === []) {
             return '';
         }
 
+        $passed = $this->passedEvals();
+        $total = $this->totalEvals();
+        $avgScore = number_format($this->avgScore(), 2);
         $totalCost = $this->totalCost();
 
-        $lines = [
-            '',
-            str_repeat('─', 60),
-            sprintf(
-                '  Evals: <fg=white>%d/%d passed</> | Avg score: <fg=white>%s</>',
-                $this->passedEvals(),
-                $this->totalEvals(),
-                number_format($this->avgScore(), 2),
-            ),
-        ];
+        $lines = [''];
 
-        if ($totalCost->totalTokens() > 0) {
-            $lines[] = sprintf(
-                '  Cost: <fg=white>%s tokens</>',
-                number_format($totalCost->totalTokens()),
-            );
+        foreach ($this->entries as $entry) {
+            $agent = $entry['agent'];
+            $result = $entry['result'];
+            $icon = $result->passed ? '<fg=green>✓</>' : '<fg=red>✗</>';
+
+            $scorerParts = [];
+            foreach ($result->scoresByScorer() as $scorer => $score) {
+                $scorerName = class_basename($scorer);
+                $formatted = number_format($score, 2);
+                $color = $score >= $result->threshold ? 'green' : 'red';
+                $scorerParts[] = "<fg={$color}>{$scorerName} {$formatted}</>";
+            }
+
+            $lines[] = "  {$icon} <fg=white>{$agent}</>  ".implode('  ', $scorerParts);
         }
 
         $lines[] = '';
 
-        return implode("\n", $lines);
-    }
-
-    public function render(): string
-    {
-        if ($this->entries === []) {
-            return 'No eval results to report.';
-        }
-
-        $lines = [
-            '',
-            'Eval Report',
-            str_repeat('─', 65),
-            sprintf('  %-25s %-20s %-8s %s', 'Agent', 'Scorer', 'Score', 'Pass'),
-            str_repeat('─', 65),
-        ];
-
-        foreach ($this->entries as $entry) {
-            $agent = $entry['agent'];
-
-            foreach ($entry['result']->scoresByScorer() as $scorer => $avgScore) {
-                $scorerName = class_basename($scorer);
-                $passed = $avgScore >= $entry['result']->threshold;
-
-                $lines[] = sprintf(
-                    '  %-25s %-20s %-8s %s',
-                    $agent,
-                    $scorerName,
-                    number_format($avgScore, 2),
-                    $passed ? 'PASS' : 'FAIL',
-                );
-
-                $agent = '';
-            }
-        }
-
-        $totalCost = $this->totalCost();
-
-        $lines[] = str_repeat('─', 65);
-        $lines[] = sprintf(
-            'Overall: %d/%d passed | Avg score: %s',
-            $this->passedEvals(),
-            $this->totalEvals(),
-            number_format($this->avgScore(), 2),
-        );
+        $passColor = $passed === $total ? 'green' : 'yellow';
+        $lines[] = "  <fg={$passColor};options=bold>{$passed}/{$total} evals passed</>  <fg=gray>avg score {$avgScore}</>";
 
         if ($totalCost->totalTokens() > 0) {
-            $lines[] = sprintf(
-                'Cost: %s tokens',
-                number_format($totalCost->totalTokens()),
-            );
+            $lines[] = '  <fg=gray>'.number_format($totalCost->totalTokens()).' tokens</>';
         }
 
         $lines[] = '';
