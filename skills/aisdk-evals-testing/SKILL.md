@@ -1,13 +1,13 @@
 ---
 name: aisdk-evals-testing
-description: "Write evaluation tests for Laravel AI SDK agents using pest-plugin-eval. Use this skill whenever the user wants to evaluate AI agents, write eval tests, choose scorers (deterministic, LLM-as-judge, semantic, tool/agent), create custom scorers, configure eval scoring providers, or run evals with PestPHP. Triggers on: evaluate(), evaluateTask(), LlmJudge, ContainsAll, ExactMatch, Factuality, Relevance, Safety, SemanticSimilarity, ToolCallMatch, AgentTrajectory, pest --eval, make:eval, make:scorer, or any mention of AI agent evaluation/testing."
+description: "Write evaluation tests for Laravel AI SDK agents using pest-plugin-evals. Use this skill whenever the user wants to evaluate AI agents, write eval tests, choose scorers (deterministic, LLM-as-judge, semantic, tool/agent), create custom scorers, configure eval scoring providers, or run evals with PestPHP. Triggers on: evaluate(), evaluateTask(), LlmJudge, ContainsAll, ExactMatch, Factuality, Relevance, Safety, SemanticSimilarity, ToolCallMatch, AgentTrajectory, pest --eval, make:eval, make:scorer, or any mention of AI agent evaluation/testing."
 ---
 
 # Writing Evals with Pest Plugin Eval
 
 ## Overview
 
-`pest-plugin-eval` is a PestPHP plugin for evaluating Laravel AI SDK agents. It provides a fluent API with 13 built-in scorers across deterministic, LLM-as-judge, semantic, and tool/agent categories.
+`pest-plugin-evals` is a PestPHP plugin for evaluating Laravel AI SDK agents. It provides a fluent API with 13 built-in scorers across deterministic, LLM-as-judge, semantic, and tool/agent categories.
 
 Namespace: `ShipFastLabs\PestEval`
 Entry points:

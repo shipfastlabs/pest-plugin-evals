@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A PestPHP plugin (`shipfastlabs/pest-plugin-eval`) for evaluating Laravel AI SDK agents. Provides a fluent API to run agents against prompts, score outputs with various scorers (deterministic, LLM-as-judge, semantic, tool-call), and assert pass rates.
+A PestPHP plugin (`shipfastlabs/pest-plugin-evals`) for evaluating Laravel AI SDK agents. Provides a fluent API to run agents against prompts, score outputs with various scorers (deterministic, LLM-as-judge, semantic, tool-call), and assert pass rates.
 
 ## Commands
 

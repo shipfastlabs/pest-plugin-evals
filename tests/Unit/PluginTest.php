@@ -65,7 +65,7 @@ describe('Plugin --eval handling', function (): void {
 function withTemporaryWorkingDirectory(callable $callback): void
 {
     $originalDirectory = getcwd();
-    $temporaryDirectory = sys_get_temp_dir().'/pest-plugin-eval-'.uniqid('', true);
+    $temporaryDirectory = sys_get_temp_dir().'/pest-plugin-evals-'.uniqid('', true);
 
     mkdir($temporaryDirectory, 0777, true);
     chdir($temporaryDirectory);
