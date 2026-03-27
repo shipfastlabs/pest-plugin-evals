@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A PestPHP plugin (`shipfastlabs/pest-plugin-evals`) for evaluating Laravel AI SDK agents. Provides a fluent API to run agents against prompts, score outputs with various scorers (deterministic, LLM-as-judge, semantic, tool-call), and assert pass rates.
+A PestPHP plugin (`shipfastlabs/pest-plugin-evals`) for evaluating Laravel AI SDK agents. Uses Pest's native `expect()` API — `expectAgent()` runs the agent and returns a standard Pest Expectation, so native Pest expectations work directly on agent output alongside custom LLM scorer expectations.
 
 ## Commands
 
@@ -20,7 +20,7 @@ composer refactor      # Fix with Rector
 
 Run a single test file:
 ```bash
-./vendor/bin/pest tests/Unit/Scorers/JsonMatchTest.php
+./vendor/bin/pest tests/Unit/Expectations/EvalExpectationsTest.php
 ```
 
 Run a single test by name:
@@ -37,26 +37,29 @@ Implements Pest's `HandlesArguments` and `AddsOutput` contracts. Key behavior:
 - After eval runs, renders `EvalReport` summary
 
 ### Eval Execution Flow
-`EvalBuilder` (fluent API) -> `EvalRunner` -> `EvalResult`
+`expectAgent()` -> `EvalExpectationContext` -> Pest `Expectation`
 
-1. **EvalBuilder** configures: agent class (or closure via `task()`), prompt, scorers, threshold, runs count, optional fake responses
-2. **EvalRunner** executes the task N times, scores each run with all scorers, calculates pass rate
-3. **EvalResult** holds runs, pass rate, and whether it passed the threshold
-4. **EvalReport** is a singleton that collects results across tests for final output
+1. **`expectAgent()`** (src/Autoload.php): entry point. Takes agent class/closure, prompt, runs count, optional fake responses. Returns a Pest Expectation wrapping the agent output.
+2. **`EvalExpectationContext`** (src/Eval/EvalExpectationContext.php): resolves the agent task (class from container, closure, or faked), executes it N times, caches outputs. Set as static `$current` so custom expectations can access prompt/agent name.
+3. **Custom expectations** (src/Autoload.php): `toBeRelevant`, `toBeSafe`, `toBeFactual`, `toPassJudge`, `toBeSemanticallySimilar`, `toHaveToolCalls`, `toFollowTrajectory`. Each reads context, runs the scorer, adds to EvalReport, and asserts score >= threshold.
+4. **`EvalReport`** (src/Eval/EvalReport.php): singleton that collects scorer results incrementally for final output.
 
-Agents are resolved via Laravel Container (`Container::getInstance()->make()`). When `fake()` is used, the agent is bypassed entirely and predefined responses are returned.
+For single-run: `expectAgent()` returns `expect($output)` — a regular Pest Expectation.
+For multi-run (`runs: N`): returns `expect([$out1,...,$outN])->each` — Pest's each proxy applies every subsequent assertion to every output.
+
+Agents are resolved via Laravel Container (`Container::getInstance()->make()`). When `fake:` is used, the agent is bypassed entirely and predefined responses are returned.
 
 ### Scorer Interface
-All scorers implement `Scorer::score(string $input, string $output, ?string $expected): ScorerResult`. Scores are 0.0-1.0. A run passes when its average scorer score >= threshold. Pass rate = fraction of runs that pass.
+All scorers implement `Scorer::score(string $input, string $output, ?string $expected): ScorerResult`. Scores are 0.0-1.0.
 
-**Deterministic scorers** (no API calls): `ExactMatch`, `ContainsAll`, `ContainsAny`, `RegexMatch`, `JsonMatch`, `JsonSchemaMatch`
+Deterministic checks use native Pest expectations (`toContain`, `toMatch`, `toBe`, `toBeJson`, etc.) — no scorer classes needed.
 
 **LLM-based scorers** (use `JudgesWithLlm` trait to call Laravel AI SDK): `LlmJudge`, `Factuality`, `Relevance`, `Safety`. These send a structured prompt and parse a JSON `{score, reasoning}` response.
 
 **Other scorers**: `SemanticSimilarity` (embedding cosine similarity), `ToolCallMatch` (validates tool calls/args), `AgentTrajectory` (validates tool call sequence)
 
 ### Global Functions (src/Autoload.php)
-Registers `evaluate()`, `evaluateTask()`, and custom Pest expectations (`toPassScorer`, `toPassEval`, `toHaveAvgScore`). Also registers `InteractsWithEvals` trait via `Plugin::uses()`.
+Registers `expectAgent()` and custom Pest expectations (`toBeRelevant`, `toBeSafe`, `toBeFactual`, `toPassJudge`, `toBeSemanticallySimilar`, `toHaveToolCalls`, `toFollowTrajectory`).
 
 ### Namespace
 `ShipFastLabs\PestEval\` maps to `src/`. Tests use `ShipFastLabs\PestEval\Tests\`.

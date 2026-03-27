@@ -1,201 +1,132 @@
 ---
 name: aisdk-evals-testing
-description: "Write evaluation tests for Laravel AI SDK agents using pest-plugin-evals. Use this skill whenever the user wants to evaluate AI agents, write eval tests, choose scorers (deterministic, LLM-as-judge, semantic, tool/agent), create custom scorers, configure eval scoring providers, or run evals with PestPHP. Triggers on: evaluate(), evaluateTask(), LlmJudge, ContainsAll, ExactMatch, Factuality, Relevance, Safety, SemanticSimilarity, ToolCallMatch, AgentTrajectory, pest --eval, make:eval, make:scorer, or any mention of AI agent evaluation/testing."
+description: "Write evaluation tests for Laravel AI SDK agents using pest-plugin-evals. Use this skill whenever the user wants to evaluate AI agents, write eval tests, use LLM-as-judge scoring, semantic similarity, tool/agent validation, or run evals with PestPHP. Triggers on: expectAgent(), toBeRelevant, toBeSafe, toBeFactual, toPassJudge, toBeSemanticallySimilar, toHaveToolCalls, toFollowTrajectory, LlmJudge, Factuality, Relevance, Safety, SemanticSimilarity, ToolCallMatch, AgentTrajectory, pest --eval, make:eval, make:scorer, or any mention of AI agent evaluation/testing."
 ---
 
 # Writing Evals with Pest Plugin Eval
 
 ## Overview
 
-`pest-plugin-evals` is a PestPHP plugin for evaluating Laravel AI SDK agents. It provides a fluent API with 13 built-in scorers across deterministic, LLM-as-judge, semantic, and tool/agent categories.
+`pest-plugin-evals` is a PestPHP plugin for evaluating Laravel AI SDK agents. It uses Pest's native `expect()` API — `expectAgent()` runs the agent and returns a standard Pest Expectation, so native Pest expectations work directly on agent output alongside custom LLM scorer expectations.
 
 Namespace: `ShipFastLabs\PestEval`
-Entry points:
-- `evaluate(AgentClass::class)` — evaluate an agent class (must have a `prompt($input)` method)
-- `evaluateTask(fn(string $input): string => ...)` — evaluate any callable
+Entry point: `expectAgent(AgentClass::class, 'prompt')` — runs the agent, returns Pest Expectation wrapping the output.
 
 ```php
-use function ShipFastLabs\PestEval\evaluate;
-use ShipFastLabs\PestEval\Scorers\LlmJudge;
-use ShipFastLabs\PestEval\Scorers\ContainsAll;
+use function ShipFastLabs\PestEval\expectAgent;
 
 it('answers refund questions accurately', function () {
-    evaluate(RefundAgent::class)
-        ->withPrompt('Can I return a damaged laptop?')
-        ->score(LlmJudge::class, criteria: 'Response explains the refund policy clearly')
-        ->score(ContainsAll::class, terms: ['refund', 'return', '30 days'])
-        ->threshold(0.8)
-        ->assert();
+    expectAgent(RefundAgent::class, 'Can I return a damaged laptop?')
+        ->toContain('refund')
+        ->toContain('return')
+        ->toPassJudge('Response explains the refund policy clearly', threshold: 0.8)
+        ->toBeRelevant(0.8);
 })->group('eval');
 ```
 
-Run evals with `pest --eval` or `pest --group=eval`.
+Run evals with `pest --eval`. Eval tests are **excluded from normal test runs** automatically — the plugin adds `--exclude-group=eval` when `--eval` is not passed.
 
-## Choosing the Right Scorer
+## How It Works
 
-Pick scorers based on what you need to verify. Combine multiple scorers for thorough coverage — deterministic scorers are free and instant, so use them for hard requirements alongside LLM-based scorers for qualitative checks.
+`expectAgent()` resolves the agent, runs it with the prompt, and returns a Pest `Expectation<string>` wrapping the output. All native Pest expectations work directly. Custom expectations handle LLM scoring.
 
-You know the exact expected output:
-- `ExactMatch` — strict string comparison (supports case/trim options)
-- `JsonMatch` — structural JSON comparison (order-insensitive)
-
-Output must contain specific content:
-- `ContainsAll` — all listed terms must appear (scores proportionally: 2/3 terms = 0.67)
-- `ContainsAny` — at least one term must appear
-- `RegexMatch` — output must match a regex pattern
-
-Output must conform to a structure:
-- `JsonSchemaMatch` — validates JSON output against a schema (types, required fields)
-
-You need subjective quality evaluation:
-- `LlmJudge` — evaluate against custom plain-English criteria (most flexible)
-- `Relevance` — is the response on-topic to the input?
-- `Safety` — check for harmful, toxic, or unsafe content
-- `Factuality` — fact-check output against a reference answer (requires `->expect()`)
-
-Output should be semantically close but not exact:
-- `SemanticSimilarity` — cosine similarity between embeddings (requires `->expect()`)
-
-Agent must use specific tools:
-- `ToolCallMatch` — validate expected tool calls and their arguments
-- `AgentTrajectory` — validate tool call sequence/order
-
-## Scorer Reference
-
-All scorers live in `ShipFastLabs\PestEval\Scorers`. Scorers marked with `expect()` require `->expect('reference')` on the builder.
-
-### Deterministic Scorers (no API calls)
-
-ExactMatch — `expect()` required
 ```php
-->expect('Paris')
-->score(ExactMatch::class, caseSensitive: false, trim: true)
+expectAgent(MyAgent::class, 'What is the capital of France?')
+    ->toBe('Paris')              // native Pest
+    ->toContain('Paris')         // native Pest
+    ->toMatch('/^[A-Z]/')        // native Pest
+    ->toBeRelevant(0.9)          // custom LLM scorer
+    ->toBeSafe();                // custom LLM scorer
 ```
-Score: 1.0 if match, 0.0 otherwise. Params: `caseSensitive` (default true), `trim` (default true).
 
-ContainsAll
+For multiple runs: `expectAgent(Agent::class, 'prompt', runs: 5)` — every assertion must pass on every output.
+
+## Choosing the Right Approach
+
+**Deterministic checks — use native Pest expectations (free, instant):**
+- `->toContain('term')` — output contains a string
+- `->toMatch('/pattern/')` — regex match
+- `->toBe('exact')` — exact string match
+- `->toBeJson()` — valid JSON
+- `->json()->toHaveKey('key')` — JSON structure
+
+**Subjective quality — use custom LLM expectations:**
+- `->toPassJudge('criteria', 0.8)` — evaluate against custom plain-English criteria (most flexible)
+- `->toBeRelevant(0.7)` — is the response on-topic?
+- `->toBeSafe(0.7)` — check for harmful content
+- `->toBeFactual(0.7, expected: 'reference')` — fact-check against reference
+
+**Semantic comparison:**
+- `->toBeSemanticallySimilar('reference', 0.7)` — cosine similarity between embeddings
+
+**Agent tool validation:**
+- `->toHaveToolCalls([...])` — validate expected tool calls and arguments
+- `->toFollowTrajectory([...])` — validate tool call sequence/order
+
+## Custom Expectations Reference
+
+All thresholds default to 0.7 and represent the minimum score (0.0-1.0) required to pass.
+
+### LLM-as-Judge
+
+toPassJudge
 ```php
-->score(ContainsAll::class, terms: ['refund', 'return', '30 days'], caseSensitive: false)
-```
-Score: proportional (matched / total terms). Params: `terms` (array), `caseSensitive` (default false).
-
-ContainsAny
-```php
-->score(ContainsAny::class, terms: ['yes', 'approved', 'confirmed'])
-```
-Score: 1.0 if any term present, 0.0 otherwise. Params: `terms` (array), `caseSensitive` (default false).
-
-RegexMatch
-```php
-->score(RegexMatch::class, pattern: '/\d{1,2}\s*days/')
-```
-Score: 1.0 if pattern matches, 0.0 otherwise. Params: `pattern` (string, with delimiters).
-
-JsonMatch — `expect()` required
-```php
-->expect('{"currency": "USD", "amount": 30}')
-->score(JsonMatch::class)
-```
-Score: 1.0 if structures match (order-insensitive), 0.0 otherwise. No params.
-
-JsonSchemaMatch
-```php
-->score(JsonSchemaMatch::class, schema: [
-    'type' => 'object',
-    'required' => ['amount', 'currency'],
-    'properties' => [
-        'amount' => ['type' => 'integer'],
-        'currency' => ['type' => 'string'],
-    ],
-])
-```
-Score: 1.0 if valid, 0.0 otherwise. Supports: `type`, `required`, `properties`, `items`, nested schemas.
-
-### LLM-as-Judge Scorers (API calls to scoring provider)
-
-All accept optional `provider` and `model` params to override the config defaults.
-
-LlmJudge
-```php
-->score(LlmJudge::class, criteria: 'Response is empathetic, accurate, and mentions the 30-day policy')
+->toPassJudge('Response is empathetic, accurate, and mentions the 30-day policy', threshold: 0.8)
 ```
 Score: 0.0-1.0. The `criteria` param is plain English describing what a good response looks like.
 
-Factuality — `expect()` required
+toBeFactual — requires `expected:` reference
 ```php
-->expect('The capital of France is Paris')
-->score(Factuality::class)
+->toBeFactual(expected: 'The capital of France is Paris')
 ```
 Score: 1.0 (equal), 0.9 (approximately equal), 0.8 (superset), 0.6 (subset), 0.0 (disagreement).
 
-Relevance
+toBeRelevant
 ```php
-->score(Relevance::class)
+->toBeRelevant(0.8)
 ```
 Score: 0.0-1.0. Checks if the response is on-topic relative to the input prompt.
 
-Safety
+toBeSafe
 ```php
-->score(Safety::class)
+->toBeSafe(0.9)
 ```
 Score: 0.0-1.0. Checks for harmful, toxic, or unsafe content. 1.0 = completely safe.
 
-### Semantic Scorer (embedding API call)
+### Semantic
 
-SemanticSimilarity — `expect()` required
+toBeSemanticallySimilar — requires `expected` reference
 ```php
-->expect('5 to 7 business days')
-->score(SemanticSimilarity::class)
+->toBeSemanticallySimilar('5 to 7 business days', threshold: 0.7)
 ```
-Score: 0.0-1.0 (cosine similarity between embeddings). Uses the embedding provider from config.
+Score: 0.0-1.0 (cosine similarity between embeddings).
 
-### Agent/Tool Scorers (no API calls)
+### Agent/Tool
 
-ToolCallMatch
+toHaveToolCalls
 ```php
-->score(ToolCallMatch::class, tools: [
+->toHaveToolCalls([
     'LookupOrder' => ['order_id' => '12345'],
     'SendEmail' => fn(array $args) => filter_var($args['to'] ?? '', FILTER_VALIDATE_EMAIL) !== false,
-], strict: false)
+])
 ```
-Score: proportional (matched / total tools). `strict: true` requires exact argument match; `false` (default) does subset check. Arguments can be arrays (exact match) or closures (custom validation).
+Score: proportional (matched / total tools). Arguments can be arrays (subset match) or closures (custom validation).
 
-AgentTrajectory
+toFollowTrajectory
 ```php
-->score(AgentTrajectory::class, sequence: [
-    'SearchDatabase',
-    'AnalyzeResults',
-    'GenerateReport',
-], strictOrder: true)
+->toFollowTrajectory(['SearchDatabase', 'AnalyzeResults', 'GenerateReport'], strictOrder: true)
 ```
-Score: proportional (matched / total sequence items). `strictOrder: true` (default) requires exact order; `false` just checks all tools were called.
+Score: proportional (matched / total sequence items). `strictOrder: true` (default) requires exact order.
 
-## EvalBuilder API
+## expectAgent() API
 
 ```php
-evaluate(AgentClass::class)          // or evaluateTask(fn($input) => ...)
-    ->withPrompt('user input')       // required: the input to send
-    ->expect('reference answer')     // optional: needed by some scorers
-    ->score(Scorer::class, ...args)  // add scorer (chain multiple)
-    ->using($scorerInstance)         // add pre-instantiated scorer
-    ->threshold(0.7)                 // pass threshold 0-1 (default 0.7)
-    ->runs(3)                        // repeat N times (default 1)
-    ->fake(['response1', 'response2']) // mock responses (cycles through)
-    ->assert();                      // run + assert (or ->run() for EvalResult)
-```
-
-EvalResult properties: `passed`, `passRate`, `avgLatencyMs`, `runs[]`, `scorerResults[]`, `cost`
-EvalResult methods: `avgScore()`, `scoresByScorer()`
-
-### Custom Expectations
-
-```php
-// On EvalResult
-expect($result)->toPassEval(threshold: 0.8);
-expect($result)->toHaveAvgScore(0.7);
-
-// On string output
-expect($response)->toPassScorer(ContainsAll::class, terms: ['refund'], threshold: 0.7);
+expectAgent(
+    string|Closure $agent,   // Agent class name or closure
+    string $prompt,          // The input prompt
+    int $runs = 1,           // Number of runs (all assertions checked on every output)
+    array $fake = [],        // Fake responses (bypasses agent execution)
+): mixed
 ```
 
 ## Common Patterns
@@ -203,54 +134,62 @@ expect($response)->toPassScorer(ContainsAll::class, terms: ['refund'], threshold
 ### Dataset-driven evals
 ```php
 it('handles various scenarios', function (string $prompt, string $criteria) {
-    evaluate(RefundAgent::class)
-        ->withPrompt($prompt)
-        ->score(LlmJudge::class, criteria: $criteria)
-        ->assert();
+    expectAgent(RefundAgent::class, $prompt)
+        ->toPassJudge($criteria);
 })->with([
     ['Can I return after 60 days?', 'Explains the 30-day policy limit'],
     ['Item arrived broken', 'Shows empathy and offers replacement'],
 ])->group('eval');
 ```
 
-### Statistical robustness
+### Statistical robustness (multiple runs)
 ```php
-evaluate(SalesCoach::class)
-    ->withPrompt('How do I handle price objections?')
-    ->score(LlmJudge::class, criteria: 'Provides actionable sales techniques')
-    ->runs(5)
-    ->threshold(0.8) // 80% of 5 runs must pass
-    ->assert();
+it('consistently provides good advice', function () {
+    expectAgent(SalesCoach::class, 'How do I handle price objections?', runs: 5)
+        ->toContain('objection')
+        ->toPassJudge('Provides actionable sales techniques');
+})->group('eval');
 ```
 
 ### Fast iteration with faked responses
 ```php
-evaluate(RefundAgent::class)
-    ->withPrompt('Test input')
-    ->fake(['Our return policy allows returns within 30 days.'])
-    ->score(ContainsAll::class, terms: ['30 days'])
-    ->assert();
+it('eval pipeline works with faked responses', function () {
+    expectAgent(
+        RefundAgent::class,
+        'What is your return policy?',
+        fake: ['Our return policy allows returns within 30 days.'],
+    )->toContain('30 days')
+        ->toMatch('/\d+ days/');
+})->group('eval');
 ```
 
-### Combining deterministic + LLM scorers
+### Combining native Pest + LLM expectations
 ```php
-evaluate(RefundAgent::class)
-    ->withPrompt('Can I return a damaged laptop?')
-    ->score(ContainsAll::class, terms: ['refund', 'return'])     // fast, free
-    ->score(LlmJudge::class, criteria: 'Professional and empathetic tone') // nuanced
-    ->score(Safety::class)                                        // guardrail
-    ->threshold(0.8)
-    ->assert();
+it('provides helpful refund info', function () {
+    expectAgent(RefundAgent::class, 'Can I return a damaged laptop?')
+        ->toContain('refund')
+        ->toContain('return')
+        ->toPassJudge('Professional and empathetic tone', threshold: 0.8)
+        ->toBeSafe();
+})->group('eval');
 ```
 
-### Custom task without an agent class
+### Closure task (without an agent class)
 ```php
-use function ShipFastLabs\PestEval\evaluateTask;
+it('works with any callable', function () {
+    expectAgent(
+        fn(string $input): string => MyService::handle($input),
+        'Hello',
+    )->toContain('greeting');
+})->group('eval');
+```
 
-evaluateTask(fn(string $input): string => MyService::handle($input))
-    ->withPrompt('Hello')
-    ->score(ContainsAll::class, terms: ['greeting'])
-    ->assert();
+### Direct mode (score an existing string)
+```php
+it('validates a pre-computed response', function () {
+    expect('The capital of France is Paris.')
+        ->toBeRelevant(0.8);
+});
 ```
 
 ## Configuration
@@ -263,7 +202,7 @@ return [
     'ai' => [
         'scoring' => [
             'provider' => env('EVAL_SCORING_PROVIDER', 'openai'),
-            'model' => env('EVAL_SCORING_MODEL', 'gpt-5.4-nano'),
+            'model' => env('EVAL_SCORING_MODEL', 'gpt-4.1-mini'),
         ],
         'embedding' => [
             'provider' => env('EVAL_EMBEDDING_PROVIDER', 'openai'),
@@ -271,11 +210,6 @@ return [
         ],
     ],
 ];
-```
-
-LLM-based scorers accept `provider` and `model` params to override per-scorer:
-```php
-->score(LlmJudge::class, criteria: '...', provider: 'anthropic', model: 'claude-sonnet-4-5-20250514')
 ```
 
 ## Artisan Commands
@@ -287,36 +221,80 @@ php artisan make:scorer ToneChecker    # creates app/Scorers/ToneChecker.php
 
 ## Custom Scorers
 
-Implement the `Scorer` interface:
+### 1. Create the scorer
+
+Scaffold with artisan or implement the `Scorer` interface manually:
+
+```bash
+php artisan make:scorer ToneScorer
+```
 
 ```php
+namespace App\Scorers;
+
 use ShipFastLabs\PestEval\Scorers\Scorer;
 use ShipFastLabs\PestEval\Scorers\ScorerResult;
 
-class ToneScorer implements Scorer
+final class ToneScorer implements Scorer
 {
-    public function __construct(private string $expectedTone = 'professional') {}
+    public function __construct(
+        private string $expectedTone = 'professional',
+    ) {}
 
     public function score(string $input, string $output, ?string $expected = null): ScorerResult
     {
-        $score = str_contains(mb_strtolower($output), $this->expectedTone) ? 0.9 : 0.2;
+        $score = str_contains(mb_strtolower($output), $this->expectedTone) ? 1.0 : 0.0;
 
         return new ScorerResult(
             score: $score,
-            reasoning: $score > 0.5 ? 'Tone matches.' : 'Tone mismatch.',
+            reasoning: $score > 0.5 ? "Output matches '{$this->expectedTone}' tone." : "Output does not match '{$this->expectedTone}' tone.",
             scorer: self::class,
         );
     }
 }
 ```
 
-Use it: `->score(ToneScorer::class, expectedTone: 'casual')` or `->using(new ToneScorer('casual'))`
+The `score()` method receives:
+- `$input` — the prompt sent to the agent
+- `$output` — the agent's response (this is what you score)
+- `$expected` — optional reference answer (for comparison-based scorers)
+
+Return a `ScorerResult` with a `score` between `0.0` (fail) and `1.0` (pass).
+
+### 2. Register as a Pest expectation
+
+Add a custom expectation in `tests/Pest.php` (or `tests/Expectations.php`):
+
+```php
+use App\Scorers\ToneScorer;
+use Pest\Expectation;
+use function ShipFastLabs\PestEval\assertScorerResult;
+
+expect()->extend('toHaveTone', function (string $tone, float $threshold = 0.7): Expectation {
+    assertScorerResult(new ToneScorer($tone), $this->value, $threshold);
+
+    return $this;
+});
+```
+
+`assertScorerResult()` handles context resolution, scoring, reporting to `EvalReport`, and asserting the score meets the threshold.
+
+### 3. Use in eval tests
+
+```php
+it('responds professionally', function () {
+    expectAgent(SupportAgent::class, 'I want a refund')
+        ->toContain('refund')
+        ->toHaveTone('professional', threshold: 0.8)
+        ->toBeSafe();
+})->group('eval');
+```
 
 ## Common Pitfalls
 
 - Always add `->group('eval')` so `pest --eval` picks up your tests
-- `ExactMatch`, `JsonMatch`, `Factuality`, and `SemanticSimilarity` require `->expect()` — forgetting it gives a 0.0 score
-- `LlmJudge` needs a non-empty `criteria:` parameter — be specific about what "good" looks like
-- `ToolCallMatch` and `AgentTrajectory` expect the agent's output to contain JSON-formatted tool calls
-- Agent classes must be compatible with Laravel AI SDK (implement the agent contract with a `prompt()` method)
+- `toPassJudge` needs specific `criteria:` — be clear about what "good" looks like
+- `toBeFactual` and `toBeSemanticallySimilar` need an `expected:` reference string
+- `toHaveToolCalls` and `toFollowTrajectory` expect JSON-formatted tool calls in the output
+- Agent classes must have a `prompt()` method (Laravel AI SDK agent contract)
 - The config path is `eval.ai.scoring.*` (not `eval.judge.*`)

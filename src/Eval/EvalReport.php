@@ -6,9 +6,11 @@ namespace ShipFastLabs\PestEval\Eval;
 
 final class EvalReport
 {
+    private const string TEMP_FILE_PREFIX = 'pest_eval_';
+
     private static ?self $instance = null;
 
-    /** @var list<array{agent: string, result: EvalResult}> */
+    /** @var list<array{agent: string, scorer: string, score: float, passed: bool}> */
     private array $entries = [];
 
     public static function instance(): self
@@ -21,9 +23,14 @@ final class EvalReport
         self::$instance = null;
     }
 
-    public function add(string $agent, EvalResult $result): void
+    public function addScorerResult(string $agent, string $scorer, float $score, float $threshold): void
     {
-        $this->entries[] = ['agent' => $agent, 'result' => $result];
+        $this->entries[] = [
+            'agent' => $agent,
+            'scorer' => class_basename($scorer),
+            'score' => $score,
+            'passed' => $score >= $threshold,
+        ];
     }
 
     public function totalEvals(): int
@@ -33,20 +40,44 @@ final class EvalReport
 
     public function passedEvals(): int
     {
-        return collect($this->entries)->filter(fn (array $entry): bool => $entry['result']->passed)->count();
+        return collect($this->entries)->filter(fn (array $entry): bool => $entry['passed'])->count();
     }
 
     public function avgScore(): float
     {
-        return collect($this->entries)->avg(fn (array $entry): float => $entry['result']->avgScore()) ?? 0.0;
+        return collect($this->entries)->avg('score') ?? 0.0;
     }
 
-    public function totalCost(): CostSummary
+    public function flushToFile(): void
     {
-        return collect($this->entries)->reduce(
-            fn (CostSummary $carry, array $entry): CostSummary => $carry->add($entry['result']->cost),
-            CostSummary::zero(),
-        );
+        if ($this->entries === []) {
+            return;
+        }
+
+        $token = is_string($_SERVER['UNIQUE_TEST_TOKEN'] ?? null)
+            ? $_SERVER['UNIQUE_TEST_TOKEN']
+            : uniqid('eval_');
+        $path = sys_get_temp_dir().'/'.self::TEMP_FILE_PREFIX.$token.'.json';
+
+        file_put_contents($path, json_encode($this->entries, JSON_THROW_ON_ERROR));
+    }
+
+    public function mergeWorkerFiles(): void
+    {
+        $pattern = sys_get_temp_dir().'/'.self::TEMP_FILE_PREFIX.'*.json';
+
+        foreach (glob($pattern) ?: [] as $file) {
+            $decoded = json_decode((string) file_get_contents($file), true);
+
+            if (is_array($decoded)) {
+                /** @var list<array{agent: string, scorer: string, score: float, passed: bool}> $decoded */
+                foreach ($decoded as $entry) {
+                    $this->entries[] = $entry;
+                }
+            }
+
+            unlink($file);
+        }
     }
 
     public function renderSummary(): string
@@ -58,17 +89,11 @@ final class EvalReport
         $passed = $this->passedEvals();
         $total = $this->totalEvals();
         $avgScore = number_format($this->avgScore(), 2);
-        $totalCost = $this->totalCost();
 
         $passColor = $passed === $total ? 'green' : 'yellow';
 
         $lines = [''];
-        $lines[] = "  <fg={$passColor};options=bold>{$passed}/{$total} evals passed</>  <fg=gray>avg score {$avgScore}</>";
-
-        if ($totalCost->totalTokens() > 0) {
-            $lines[] = '  <fg=gray>'.number_format($totalCost->totalTokens()).' tokens</>';
-        }
-
+        $lines[] = "<fg={$passColor};options=bold>{$passed}/{$total} evals passed</>  <fg=gray>avg score {$avgScore}</>";
         $lines[] = '';
 
         return implode("\n", $lines);

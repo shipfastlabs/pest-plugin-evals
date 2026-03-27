@@ -6,80 +6,117 @@ namespace ShipFastLabs\PestEval;
 
 use Closure;
 use Pest\Expectation;
-use Pest\Plugin;
-use ShipFastLabs\PestEval\Eval\EvalBuilder;
-use ShipFastLabs\PestEval\Eval\EvalResult;
+use ShipFastLabs\PestEval\Eval\EvalExpectationContext;
+use ShipFastLabs\PestEval\Eval\EvalReport;
+use ShipFastLabs\PestEval\Scorers\AgentTrajectory;
+use ShipFastLabs\PestEval\Scorers\Factuality;
+use ShipFastLabs\PestEval\Scorers\LlmJudge;
+use ShipFastLabs\PestEval\Scorers\Relevance;
+use ShipFastLabs\PestEval\Scorers\Safety;
 use ShipFastLabs\PestEval\Scorers\Scorer;
-use ShipFastLabs\PestEval\Scorers\ScorerResult;
+use ShipFastLabs\PestEval\Scorers\SemanticSimilarity;
+use ShipFastLabs\PestEval\Scorers\ToolCallMatch;
 
-Plugin::uses(Concerns\InteractsWithEvals::class);
+/**
+ * @param  list<string>  $fake
+ */
+function expectAgent(
+    string|Closure $agent,
+    string $prompt,
+    int $runs = 1,
+    array $fake = [],
+): mixed {
+    $ctx = new EvalExpectationContext(
+        prompt: $prompt,
+        agentName: is_string($agent) ? class_basename($agent) : 'Task',
+        runs: $runs,
+        fakedResponses: $fake,
+    );
 
-function evaluate(string $agentClass): EvalBuilder
-{
-    return (new EvalBuilder())->agent($agentClass);
-}
+    EvalExpectationContext::$current = $ctx;
 
-function evaluateTask(Closure $task): EvalBuilder
-{
-    return (new EvalBuilder())->task($task);
-}
+    $outputs = $ctx->resolveOutputs($agent);
 
-expect()->extend('toPassScorer', function (string|Scorer $scorer, float $threshold = 0.7, mixed ...$args): Expectation {
-    /** @var Expectation<mixed> $this */
-    $value = $this->value;
-
-    if (! is_string($value)) {
-        throw new \RuntimeException('toPassScorer expects a string value (the AI response output).');
+    if (count($outputs) === 1) {
+        return expect($outputs[0]);
     }
 
-    $scorerInstance = is_string($scorer) ? new $scorer(...$args) : $scorer;
+    return expect($outputs)->each;
+}
 
-    if (! $scorerInstance instanceof Scorer) {
-        throw new \RuntimeException('The provided class does not implement the Scorer interface.');
-    }
+/**
+ * @internal
+ */
+function assertScorerResult(Scorer $scorer, string $output, float $threshold, ?string $expected = null): void
+{
+    $input = EvalExpectationContext::currentPrompt();
+    $agent = EvalExpectationContext::currentAgentName();
 
-    $result = $scorerInstance->score('', $value);
+    $result = $scorer->score($input, $output, $expected);
+
+    EvalReport::instance()->addScorerResult($agent, $result->scorer, $result->score, $threshold);
+
+    $scorerName = class_basename($result->scorer);
 
     expect($result->score)->toBeGreaterThanOrEqual(
         $threshold,
-        "Scorer {$result->scorer} scored {$result->score} (threshold: {$threshold}). Reasoning: {$result->reasoning}",
+        "{$scorerName} scored {$result->score} (threshold: {$threshold}). {$result->reasoning}",
     );
+}
+
+expect()->extend('toBeRelevant', function (float $threshold = 0.7): Expectation {
+    /** @var Expectation<string> $this */
+    assertScorerResult(new Relevance(), $this->value, $threshold);
 
     return $this;
 });
 
-expect()->extend('toPassEval', function (float $threshold = 0.7): Expectation {
-    /** @var Expectation<mixed> $this */
-    $value = $this->value;
-
-    if (! $value instanceof EvalResult) {
-        throw new \RuntimeException('toPassEval expects an EvalResult instance.');
-    }
-
-    expect($value->passRate)->toBeGreaterThanOrEqual(
-        $threshold,
-        'Eval failed: pass rate '.number_format($value->passRate * 100, 1).'% below threshold '.number_format($threshold * 100, 1).'%',
-    );
+expect()->extend('toBeSafe', function (float $threshold = 0.7): Expectation {
+    /** @var Expectation<string> $this */
+    assertScorerResult(new Safety(), $this->value, $threshold);
 
     return $this;
 });
 
-expect()->extend('toHaveAvgScore', function (float $min): Expectation {
-    /** @var Expectation<mixed> $this */
-    $value = $this->value;
+expect()->extend('toBeFactual', function (float $threshold = 0.7, ?string $expected = null): Expectation {
+    /** @var Expectation<string> $this */
+    assertScorerResult(new Factuality(), $this->value, $threshold, $expected);
 
-    if ($value instanceof EvalResult) {
-        $avg = $value->avgScore();
-    } elseif ($value instanceof ScorerResult) {
-        $avg = $value->score;
-    } else {
-        throw new \RuntimeException('toHaveAvgScore expects an EvalResult or ScorerResult instance.');
-    }
+    return $this;
+});
 
-    expect($avg)->toBeGreaterThanOrEqual(
-        $min,
-        "Average score {$avg} is below minimum {$min}",
-    );
+expect()->extend('toPassJudge', function (string $criteria, float $threshold = 0.7): Expectation {
+    /** @var Expectation<string> $this */
+    assertScorerResult(new LlmJudge(criteria: $criteria), $this->value, $threshold);
+
+    return $this;
+});
+
+expect()->extend('toBeSemanticallySimilar', function (string $expected, float $threshold = 0.7): Expectation {
+    /** @var Expectation<string> $this */
+    assertScorerResult(new SemanticSimilarity(), $this->value, $threshold, $expected);
+
+    return $this;
+});
+
+/**
+ * @param  array<string, array<string, mixed>|Closure>  $expected
+ */
+expect()->extend('toHaveToolCalls', function (array $expected, float $threshold = 0.7): Expectation {
+    /** @var Expectation<string> $this */
+    /** @var array<string, array<string, mixed>|Closure> $expected */
+    assertScorerResult(new ToolCallMatch(tools: $expected), $this->value, $threshold);
+
+    return $this;
+});
+
+/**
+ * @param  list<string>  $steps
+ */
+expect()->extend('toFollowTrajectory', function (array $steps, float $threshold = 0.7, bool $strictOrder = true): Expectation {
+    /** @var Expectation<string> $this */
+    /** @var list<string> $steps */
+    assertScorerResult(new AgentTrajectory(sequence: $steps, strictOrder: $strictOrder), $this->value, $threshold);
 
     return $this;
 });

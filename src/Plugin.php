@@ -7,9 +7,12 @@ namespace ShipFastLabs\PestEval;
 use Pest\Contracts\Plugins\AddsOutput;
 use Pest\Contracts\Plugins\Bootable;
 use Pest\Contracts\Plugins\HandlesArguments;
+use Pest\Contracts\Plugins\Terminable;
 use Pest\Plugins\Concerns\HandleArguments;
+use Pest\Plugins\Parallel;
 use Pest\Support\Container;
 use Pest\TestSuite;
+use ShipFastLabs\PestEval\Eval\EvalExpectationContext;
 use ShipFastLabs\PestEval\Eval\EvalReport;
 use ShipFastLabs\PestEval\Filters\ExcludesEvalTestCaseMethodFilter;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -17,7 +20,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 /**
  * @internal
  */
-final class Plugin implements AddsOutput, Bootable, HandlesArguments
+final class Plugin implements AddsOutput, Bootable, HandlesArguments, Terminable
 {
     use HandleArguments;
 
@@ -28,7 +31,8 @@ final class Plugin implements AddsOutput, Bootable, HandlesArguments
     public static function isEvalMode(): bool
     {
         return self::$evalMode
-            || ($_SERVER[self::ENV_EVAL_MODE] ?? $_ENV[self::ENV_EVAL_MODE] ?? null) === '1';
+            || ($_SERVER[self::ENV_EVAL_MODE] ?? $_ENV[self::ENV_EVAL_MODE] ?? null) === '1'
+            || Parallel::getGlobal(self::ENV_EVAL_MODE) === true;
     }
 
     public static function resetEvalMode(): void
@@ -36,6 +40,10 @@ final class Plugin implements AddsOutput, Bootable, HandlesArguments
         self::$evalMode = false;
         unset($_SERVER[self::ENV_EVAL_MODE], $_ENV[self::ENV_EVAL_MODE]);
         putenv(self::ENV_EVAL_MODE);
+
+        $parallelKey = 'PEST_PARALLEL_GLOBAL_'.self::ENV_EVAL_MODE;
+        unset($_SERVER[$parallelKey], $_ENV[$parallelKey]);
+        putenv($parallelKey);
     }
 
     public function boot(): void
@@ -43,6 +51,10 @@ final class Plugin implements AddsOutput, Bootable, HandlesArguments
         TestSuite::getInstance()
             ->tests
             ->addTestCaseMethodFilter(new ExcludesEvalTestCaseMethodFilter());
+
+        pest()->afterEach(function (): void {
+            EvalExpectationContext::$current = null;
+        });
     }
 
     public function handleArguments(array $arguments): array
@@ -55,6 +67,8 @@ final class Plugin implements AddsOutput, Bootable, HandlesArguments
         $_SERVER[self::ENV_EVAL_MODE] = '1';
         $_ENV[self::ENV_EVAL_MODE] = '1';
         putenv(self::ENV_EVAL_MODE.'=1');
+
+        Parallel::setGlobal(self::ENV_EVAL_MODE, true);
 
         $filtered = $this->popArgument('--eval', $arguments);
 
@@ -74,6 +88,8 @@ final class Plugin implements AddsOutput, Bootable, HandlesArguments
         if (self::isEvalMode()) {
             $report = EvalReport::instance();
 
+            $report->mergeWorkerFiles();
+
             if ($report->totalEvals() > 0) {
                 /** @var OutputInterface $output */
                 $output = Container::getInstance()->get(OutputInterface::class);
@@ -85,6 +101,13 @@ final class Plugin implements AddsOutput, Bootable, HandlesArguments
         }
 
         return $exitCode;
+    }
+
+    public function terminate(): void
+    {
+        if (Parallel::isWorker()) {
+            EvalReport::instance()->flushToFile();
+        }
     }
 
     /**
