@@ -1,10 +1,10 @@
 <p align="center">
     <img src="docs/og.png" height="300" alt="Pest Plugin" />
     <p align="center">
-        <a href="https://github.com/shipfastlabs/pest-plugin-eval/actions"><img alt="GitHub Workflow Status (master)" src="https://github.com/shipfastlabs/pest-plugin-eval/actions/workflows/tests.yml/badge.svg"></a>
-        <a href="https://packagist.org/packages/shipfastlabs/pest-plugin-eval"><img alt="Total Downloads" src="https://img.shields.io/packagist/dt/shipfastlabs/pest-plugin-eval"></a>
-        <a href="https://packagist.org/packages/shipfastlabs/pest-plugin-eval"><img alt="Latest Version" src="https://img.shields.io/packagist/v/shipfastlabs/pest-plugin-eval"></a>
-        <a href="https://packagist.org/packages/shipfastlabs/pest-plugin-eval"><img alt="License" src="https://img.shields.io/packagist/l/shipfastlabs/pest-plugin-eval"></a>
+        <a href="https://github.com/shipfastlabs/pest-plugin-evals/actions"><img alt="GitHub Workflow Status (master)" src="https://github.com/shipfastlabs/pest-plugin-evals/actions/workflows/tests.yml/badge.svg"></a>
+        <a href="https://packagist.org/packages/shipfastlabs/pest-plugin-evals"><img alt="Total Downloads" src="https://img.shields.io/packagist/dt/shipfastlabs/pest-plugin-evals"></a>
+        <a href="https://packagist.org/packages/shipfastlabs/pest-plugin-evals"><img alt="Latest Version" src="https://img.shields.io/packagist/v/shipfastlabs/pest-plugin-evals"></a>
+        <a href="https://packagist.org/packages/shipfastlabs/pest-plugin-evals"><img alt="License" src="https://img.shields.io/packagist/l/shipfastlabs/pest-plugin-evals"></a>
     </p>
 </p>
 
@@ -16,7 +16,7 @@ A PestPHP plugin for evaluating Laravel AI SDK agents. Build evals with LLM-as-j
 ## Installation
 
 ```bash
-composer require shipfastlabs/pest-plugin-eval --dev
+composer require shipfastlabs/pest-plugin-evals --dev
 ```
 
 Publish the config (optional):
