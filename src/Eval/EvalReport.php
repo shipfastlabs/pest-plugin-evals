@@ -11,6 +11,8 @@ final class EvalReport
     /** @var list<array{agent: string, result: EvalResult}> */
     private array $entries = [];
 
+    private int $renderedCount = 0;
+
     public static function instance(): self
     {
         return self::$instance ??= new self();
@@ -47,6 +49,75 @@ final class EvalReport
             fn (CostSummary $carry, array $entry): CostSummary => $carry->add($entry['result']->cost),
             CostSummary::zero(),
         );
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function renderNewEntries(): array
+    {
+        $lines = [];
+        $total = count($this->entries);
+
+        for ($i = $this->renderedCount; $i < $total; $i++) {
+            $entry = $this->entries[$i];
+            $lines = [...$lines, ...$this->renderEntry($entry['agent'], $entry['result'])];
+        }
+
+        $this->renderedCount = count($this->entries);
+
+        return $lines;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function renderEntry(string $agent, EvalResult $result): array
+    {
+        $lines = [];
+
+        foreach ($result->scoresByScorer() as $scorer => $avgScore) {
+            $scorerName = class_basename($scorer);
+            $passed = $avgScore >= $result->threshold;
+            $icon = $passed ? '<fg=green>✓</>' : '<fg=red>✗</>';
+            $scoreFormatted = number_format($avgScore, 2);
+
+            $lines[] = "  {$icon} <fg=gray>{$agent}</> → {$scorerName}: <fg=white>{$scoreFormatted}</>";
+            $agent = str_repeat(' ', mb_strlen($agent));
+        }
+
+        return $lines;
+    }
+
+    public function renderSummary(): string
+    {
+        if ($this->entries === []) {
+            return '';
+        }
+
+        $totalCost = $this->totalCost();
+
+        $lines = [
+            '',
+            str_repeat('─', 60),
+            sprintf(
+                '  Evals: <fg=white>%d/%d passed</> | Avg score: <fg=white>%s</>',
+                $this->passedEvals(),
+                $this->totalEvals(),
+                number_format($this->avgScore(), 2),
+            ),
+        ];
+
+        if ($totalCost->totalTokens() > 0) {
+            $lines[] = sprintf(
+                '  Cost: <fg=white>%s tokens</>',
+                number_format($totalCost->totalTokens()),
+            );
+        }
+
+        $lines[] = '';
+
+        return implode("\n", $lines);
     }
 
     public function render(): string

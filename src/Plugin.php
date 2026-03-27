@@ -7,9 +7,11 @@ namespace ShipFastLabs\PestEval;
 use Pest\Contracts\Plugins\AddsOutput;
 use Pest\Contracts\Plugins\Bootable;
 use Pest\Contracts\Plugins\HandlesArguments;
+use Pest\Support\Container;
 use Pest\TestSuite;
 use ShipFastLabs\PestEval\Eval\EvalReport;
 use ShipFastLabs\PestEval\Filters\ExcludesEvalTestCaseMethodFilter;
+use Symfony\Component\Console\Output\OutputInterface;
 
 /**
  * @internal
@@ -23,6 +25,22 @@ final class Plugin implements AddsOutput, Bootable, HandlesArguments
         TestSuite::getInstance()
             ->tests
             ->addTestCaseMethodFilter(new ExcludesEvalTestCaseMethodFilter());
+
+        pest()->afterEach(function (): void {
+            $report = EvalReport::instance();
+            $newLines = $report->renderNewEntries();
+
+            if ($newLines === []) {
+                return;
+            }
+
+            /** @var OutputInterface $output */
+            $output = Container::getInstance()->get(OutputInterface::class);
+
+            foreach ($newLines as $line) {
+                $output->writeln($line);
+            }
+        })->in($this->in());
     }
 
     public function handleArguments(array $arguments): array
@@ -58,7 +76,9 @@ final class Plugin implements AddsOutput, Bootable, HandlesArguments
             $report = EvalReport::instance();
 
             if ($report->totalEvals() > 0) {
-                echo $report->render();
+                /** @var OutputInterface $output */
+                $output = Container::getInstance()->get(OutputInterface::class);
+                $output->writeln($report->renderSummary());
             }
 
             EvalReport::flush();
@@ -104,5 +124,10 @@ final class Plugin implements AddsOutput, Bootable, HandlesArguments
         }
 
         return false;
+    }
+
+    private function in(): string
+    {
+        return TestSuite::getInstance()->rootPath.DIRECTORY_SEPARATOR.TestSuite::getInstance()->testPath;
     }
 }
