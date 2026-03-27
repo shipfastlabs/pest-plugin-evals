@@ -7,6 +7,7 @@ namespace ShipFastLabs\PestEval;
 use Pest\Contracts\Plugins\AddsOutput;
 use Pest\Contracts\Plugins\Bootable;
 use Pest\Contracts\Plugins\HandlesArguments;
+use Pest\Plugins\Concerns\HandleArguments;
 use Pest\Support\Container;
 use Pest\TestSuite;
 use ShipFastLabs\PestEval\Eval\EvalReport;
@@ -18,7 +19,24 @@ use Symfony\Component\Console\Output\OutputInterface;
  */
 final class Plugin implements AddsOutput, Bootable, HandlesArguments
 {
-    public static bool $evalMode = false;
+    use HandleArguments;
+
+    private const string ENV_EVAL_MODE = 'PEST_EVAL_MODE';
+
+    private static bool $evalMode = false;
+
+    public static function isEvalMode(): bool
+    {
+        return self::$evalMode
+            || ($_SERVER[self::ENV_EVAL_MODE] ?? $_ENV[self::ENV_EVAL_MODE] ?? null) === '1';
+    }
+
+    public static function resetEvalMode(): void
+    {
+        self::$evalMode = false;
+        unset($_SERVER[self::ENV_EVAL_MODE], $_ENV[self::ENV_EVAL_MODE]);
+        putenv(self::ENV_EVAL_MODE);
+    }
 
     public function boot(): void
     {
@@ -29,34 +47,31 @@ final class Plugin implements AddsOutput, Bootable, HandlesArguments
 
     public function handleArguments(array $arguments): array
     {
-        if (in_array('--eval', $arguments, true)) {
-            self::$evalMode = true;
-            $_SERVER['PEST_EVAL_MODE'] = '1';
-            $_ENV['PEST_EVAL_MODE'] = '1';
-            putenv('PEST_EVAL_MODE=1');
-
-            /** @var list<string> $filtered */
-            $filtered = array_values(array_filter($arguments, fn (string $arg): bool => $arg !== '--eval'));
-
-            if ($this->shouldTargetEvalDirectory($filtered)) {
-                $filtered[] = 'tests/Evals';
-
-                return $filtered;
-            }
-
-            if (! $this->hasGroupArgument($filtered)) {
-                $filtered[] = '--group=eval';
-            }
-
-            return $filtered;
+        if (! $this->hasArgument('--eval', $arguments)) {
+            return $arguments;
         }
 
-        return $arguments;
+        self::$evalMode = true;
+        $_SERVER[self::ENV_EVAL_MODE] = '1';
+        $_ENV[self::ENV_EVAL_MODE] = '1';
+        putenv(self::ENV_EVAL_MODE.'=1');
+
+        $filtered = $this->popArgument('--eval', $arguments);
+
+        if ($this->shouldTargetEvalDirectory($filtered)) {
+            return $this->pushArgument('tests/Evals', $filtered);
+        }
+
+        if (! $this->hasArgument('--group', $filtered)) {
+            return $this->pushArgument('--group=eval', $filtered);
+        }
+
+        return $filtered;
     }
 
     public function addOutput(int $exitCode): int
     {
-        if (self::$evalMode || ($_SERVER['PEST_EVAL_MODE'] ?? $_ENV['PEST_EVAL_MODE'] ?? null) === '1') {
+        if (self::isEvalMode()) {
             $report = EvalReport::instance();
 
             if ($report->totalEvals() > 0) {
@@ -66,43 +81,29 @@ final class Plugin implements AddsOutput, Bootable, HandlesArguments
             }
 
             EvalReport::flush();
-            self::$evalMode = false;
+            self::resetEvalMode();
         }
 
         return $exitCode;
     }
 
     /**
-     * @param  list<string>  $arguments
+     * @param  array<int, string>  $arguments
      */
     private function shouldTargetEvalDirectory(array $arguments): bool
     {
         return is_dir('tests/Evals')
             && ! $this->hasPathArgument($arguments)
-            && ! $this->hasGroupArgument($arguments);
+            && ! $this->hasArgument('--group', $arguments);
     }
 
     /**
-     * @param  list<string>  $arguments
+     * @param  array<int, string>  $arguments
      */
     private function hasPathArgument(array $arguments): bool
     {
         foreach (array_slice($arguments, 1) as $argument) {
             if ($argument !== '' && ! str_starts_with($argument, '-')) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * @param  list<string>  $arguments
-     */
-    private function hasGroupArgument(array $arguments): bool
-    {
-        foreach ($arguments as $argument) {
-            if (str_starts_with($argument, '--group')) {
                 return true;
             }
         }

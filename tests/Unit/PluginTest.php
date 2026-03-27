@@ -6,7 +6,7 @@ use ShipFastLabs\PestEval\Eval\EvalReport;
 use ShipFastLabs\PestEval\Plugin;
 
 beforeEach(function (): void {
-    Plugin::$evalMode = false;
+    Plugin::resetEvalMode();
 });
 
 describe('Plugin --eval handling', function (): void {
@@ -53,7 +53,7 @@ describe('Plugin --eval handling', function (): void {
 
             $plugin->handleArguments(['vendor/bin/pest', '--eval']);
 
-            expect(Plugin::$evalMode)->toBeTrue();
+            expect(Plugin::isEvalMode())->toBeTrue();
         });
     });
 
@@ -63,7 +63,7 @@ describe('Plugin --eval handling', function (): void {
 
             $plugin->handleArguments(['vendor/bin/pest']);
 
-            expect(Plugin::$evalMode)->toBeFalse();
+            expect(Plugin::isEvalMode())->toBeFalse();
         });
     });
 
@@ -92,7 +92,7 @@ function withTemporaryWorkingDirectory(callable $callback): void
         $callback($temporaryDirectory);
     } finally {
         chdir($originalDirectory);
-        Plugin::$evalMode = false;
+        Plugin::resetEvalMode();
 
         if (is_dir("{$temporaryDirectory}/tests/Evals")) {
             rmdir("{$temporaryDirectory}/tests/Evals");

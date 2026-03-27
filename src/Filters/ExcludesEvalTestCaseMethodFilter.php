@@ -15,7 +15,7 @@ final readonly class ExcludesEvalTestCaseMethodFilter implements TestCaseMethodF
 {
     public function accept(TestCaseMethodFactory $factory): bool
     {
-        if (Plugin::$evalMode || ($_SERVER['PEST_EVAL_MODE'] ?? $_ENV['PEST_EVAL_MODE'] ?? null) === '1') {
+        if (Plugin::isEvalMode()) {
             return true;
         }
 
