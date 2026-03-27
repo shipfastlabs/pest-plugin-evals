@@ -11,3 +11,5 @@ coverage.xml
 *.swo
 .phpunit.cache
 .env
+.claude/
+.DS_Store

@@ -56,7 +56,8 @@ expect()->extend('toPassEval', function (float $threshold = 0.7): Expectation {
         throw new \RuntimeException('toPassEval expects an EvalResult instance.');
     }
 
-    expect($value->passed)->toBeTrue(
+    expect($value->passRate)->toBeGreaterThanOrEqual(
+        $threshold,
         'Eval failed: pass rate '.number_format($value->passRate * 100, 1).'% below threshold '.number_format($threshold * 100, 1).'%',
     );
 

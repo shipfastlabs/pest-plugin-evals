@@ -22,9 +22,22 @@ final class Plugin implements AddsOutput, HandlesArguments
 
             /** @var list<string> $filtered */
             $filtered = array_values(array_filter($arguments, fn (string $arg): bool => $arg !== '--eval'));
-            $filtered[] = 'tests/Evals';
+
+            if ($this->shouldTargetEvalDirectory($filtered)) {
+                $filtered[] = 'tests/Evals';
+
+                return $filtered;
+            }
+
+            if (! $this->hasGroupArgument($filtered)) {
+                $filtered[] = '--group=eval';
+            }
 
             return $filtered;
+        }
+
+        if (! $this->hasExcludeGroupArgument($arguments)) {
+            $arguments[] = '--exclude-group=eval';
         }
 
         return $arguments;
@@ -40,8 +53,61 @@ final class Plugin implements AddsOutput, HandlesArguments
             }
 
             EvalReport::flush();
+            self::$evalMode = false;
         }
 
         return $exitCode;
+    }
+
+    /**
+     * @param  list<string>  $arguments
+     */
+    private function shouldTargetEvalDirectory(array $arguments): bool
+    {
+        return is_dir('tests/Evals')
+            && ! $this->hasPathArgument($arguments)
+            && ! $this->hasGroupArgument($arguments);
+    }
+
+    /**
+     * @param  list<string>  $arguments
+     */
+    private function hasPathArgument(array $arguments): bool
+    {
+        foreach ($arguments as $argument) {
+            if ($argument !== '' && ! str_starts_with($argument, '-')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  array<int, string>  $arguments
+     */
+    private function hasExcludeGroupArgument(array $arguments): bool
+    {
+        foreach ($arguments as $argument) {
+            if (str_starts_with($argument, '--exclude-group')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  list<string>  $arguments
+     */
+    private function hasGroupArgument(array $arguments): bool
+    {
+        foreach ($arguments as $argument) {
+            if (str_starts_with($argument, '--group')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

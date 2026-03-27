@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ShipFastLabs\PestEval\Eval;
 
 use Closure;
+use Illuminate\Container\Container;
 use PHPUnit\Framework\Assert;
 use RuntimeException;
 use ShipFastLabs\PestEval\Scorers\Scorer;
@@ -157,9 +158,9 @@ final class EvalBuilder
             $agentClass = $this->agentClass;
 
             return function (string $input) use ($agentClass): string {
-                $agent = new $agentClass();
+                $agent = Container::getInstance()->make($agentClass);
 
-                return (string) $agent->prompt($input); // @phpstan-ignore method.notFound, cast.string
+                return (string) $agent->prompt($input); // @phpstan-ignore method.nonObject, cast.string
             };
         }
 

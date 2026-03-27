@@ -50,4 +50,11 @@ describe('JsonMatch', function (): void {
 
         expect($result->score)->toBe(1.0);
     });
+
+    it('distinguishes empty objects from empty arrays', function (): void {
+        $scorer = new JsonMatch();
+        $result = $scorer->score('question', '{}', '[]');
+
+        expect($result->score)->toBe(0.0);
+    });
 });

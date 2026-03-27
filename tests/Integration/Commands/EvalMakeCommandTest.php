@@ -10,6 +10,10 @@ it('can create an eval test file', function (): void {
     $response->assertExitCode(0)->run();
 
     $this->assertFileExists(base_path('tests/Evals/MyAgentEvalTest.php'));
+    $this->assertStringContainsString(
+        "->group('eval');",
+        (string) file_get_contents(base_path('tests/Evals/MyAgentEvalTest.php')),
+    );
 });
 
 it('may publish a custom stub', function (): void {

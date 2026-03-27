@@ -53,4 +53,18 @@ describe('JsonSchemaMatch', function (): void {
 
         expect($result->score)->toBe(0.0);
     });
+
+    it('rejects empty objects for array schemas', function (): void {
+        $scorer = new JsonSchemaMatch(schema: ['type' => 'array']);
+        $result = $scorer->score('question', '{}');
+
+        expect($result->score)->toBe(0.0);
+    });
+
+    it('rejects empty arrays for object schemas', function (): void {
+        $scorer = new JsonSchemaMatch(schema: ['type' => 'object']);
+        $result = $scorer->score('question', '[]');
+
+        expect($result->score)->toBe(0.0);
+    });
 });

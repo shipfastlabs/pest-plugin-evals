@@ -24,9 +24,9 @@ final readonly class JsonSchemaMatch implements Scorer
             );
         }
 
-        $decoded = json_decode($output, true);
+        $decoded = json_decode($output);
 
-        if ($decoded === null && json_last_error() !== JSON_ERROR_NONE) {
+        if (json_last_error() !== JSON_ERROR_NONE) {
             return new ScorerResult(
                 score: 0.0,
                 reasoning: 'Output is not valid JSON: '.json_last_error_msg(),
@@ -61,8 +61,8 @@ final readonly class JsonSchemaMatch implements Scorer
 
         if (isset($schema['type']) && is_string($schema['type'])) {
             $typeValid = match ($schema['type']) {
-                'object' => is_array($data) && ($data === [] || ! array_is_list($data)),
-                'array' => is_array($data) && ($data === [] || array_is_list($data)),
+                'object' => is_object($data),
+                'array' => is_array($data),
                 'string' => is_string($data),
                 'number' => is_int($data) || is_float($data),
                 'integer' => is_int($data),
@@ -78,21 +78,23 @@ final readonly class JsonSchemaMatch implements Scorer
             }
         }
 
-        if (isset($schema['required']) && is_array($schema['required']) && is_array($data)) {
+        $properties = is_object($data) ? get_object_vars($data) : null;
+
+        if (isset($schema['required']) && is_array($schema['required']) && is_array($properties)) {
             foreach ($schema['required'] as $required) {
-                if (is_string($required) && ! array_key_exists($required, $data)) {
+                if (is_string($required) && ! array_key_exists($required, $properties)) {
                     $errors[] = "{$path}: missing required property '{$required}'";
                 }
             }
         }
 
-        if (isset($schema['properties']) && is_array($schema['properties']) && is_array($data)) {
+        if (isset($schema['properties']) && is_array($schema['properties']) && is_array($properties)) {
             foreach ($schema['properties'] as $property => $propertySchema) {
                 /** @var array<string, mixed> $validSchema */
                 $validSchema = is_array($propertySchema) ? $propertySchema : [];
 
-                if (is_string($property) && array_key_exists($property, $data)) {
-                    $errors = [...$errors, ...$this->validate($data[$property], $validSchema, "{$path}.{$property}")];
+                if (is_string($property) && array_key_exists($property, $properties)) {
+                    $errors = [...$errors, ...$this->validate($properties[$property], $validSchema, "{$path}.{$property}")];
                 }
             }
         }

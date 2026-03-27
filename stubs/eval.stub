@@ -23,4 +23,4 @@ describe('{{ name }}', function () {
         ['edge case prompt 1', 'Expected behavior criteria 1'],
         ['edge case prompt 2', 'Expected behavior criteria 2'],
     ]);
-});
+})->group('eval');

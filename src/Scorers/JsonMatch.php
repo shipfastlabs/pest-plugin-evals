@@ -16,13 +16,9 @@ final readonly class JsonMatch implements Scorer
             );
         }
 
-        $outputDecoded = json_decode($output, true);
-        $outputError = json_last_error();
-        $outputErrorMsg = json_last_error_msg();
+        [$outputDecoded, $outputError, $outputErrorMsg] = $this->decodeJson($output);
 
-        $expectedDecoded = json_decode($expected, true);
-        $expectedError = json_last_error();
-        $expectedErrorMsg = json_last_error_msg();
+        [$expectedDecoded, $expectedError, $expectedErrorMsg] = $this->decodeJson($expected);
 
         if ($outputDecoded === null && $outputError !== JSON_ERROR_NONE) {
             return new ScorerResult(
@@ -40,10 +36,7 @@ final readonly class JsonMatch implements Scorer
             );
         }
 
-        $this->recursiveSort($outputDecoded);
-        $this->recursiveSort($expectedDecoded);
-
-        $matches = $outputDecoded === $expectedDecoded;
+        $matches = $this->normalize($outputDecoded) === $this->normalize($expectedDecoded);
 
         return new ScorerResult(
             score: $matches ? 1.0 : 0.0,
@@ -54,17 +47,40 @@ final readonly class JsonMatch implements Scorer
         );
     }
 
-    private function recursiveSort(mixed &$value): void
+    /**
+     * @return array{0: mixed, 1: int, 2: string}
+     */
+    private function decodeJson(string $json): array
     {
-        if (is_array($value)) {
-            foreach ($value as &$item) {
-                $this->recursiveSort($item);
-            }
+        $decoded = json_decode($json);
 
-            if (! array_is_list($value)) {
-                ksort($value);
-            }
-        }
+        return [$decoded, json_last_error(), json_last_error_msg()];
     }
 
+    private function normalize(mixed $value): mixed
+    {
+        if (is_array($value)) {
+            $normalized = [];
+
+            foreach ($value as $item) {
+                $normalized[] = $this->normalize($item);
+            }
+
+            return ['type' => 'array', 'value' => $normalized];
+        }
+
+        if (is_object($value)) {
+            $normalized = [];
+
+            foreach (get_object_vars($value) as $key => $item) {
+                $normalized[$key] = $this->normalize($item);
+            }
+
+            ksort($normalized);
+
+            return ['type' => 'object', 'value' => $normalized];
+        }
+
+        return $value;
+    }
 }

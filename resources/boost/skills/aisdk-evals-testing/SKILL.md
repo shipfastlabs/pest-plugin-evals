@@ -29,7 +29,7 @@ it('answers refund questions accurately', function () {
 })->group('eval');
 ```
 
-Run evals with `pest --eval`. Eval tests are **excluded from normal test runs** automatically — the plugin adds `--exclude-group=eval` when `--eval` is not passed, so eval tests never pollute your regular test suite.
+Run evals with `pest --eval` or `pest --group=eval`.
 
 ## Choosing the Right Scorer
 
@@ -314,7 +314,7 @@ Use it: `->score(ToneScorer::class, expectedTone: 'casual')` or `->using(new Ton
 
 ## Common Pitfalls
 
-- Always add `->group('eval')` so `pest --eval` picks up your tests (eval tests are excluded from normal runs automatically via `--exclude-group=eval`)
+- Always add `->group('eval')` so `pest --eval` picks up your tests
 - `ExactMatch`, `JsonMatch`, `Factuality`, and `SemanticSimilarity` require `->expect()` — forgetting it gives a 0.0 score
 - `LlmJudge` needs a non-empty `criteria:` parameter — be specific about what "good" looks like
 - `ToolCallMatch` and `AgentTrajectory` expect the agent's output to contain JSON-formatted tool calls
