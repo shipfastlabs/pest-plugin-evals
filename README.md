@@ -204,6 +204,27 @@ it('analyzes uploaded documents', function () {
 });
 ```
 
+### Agent instance (with constructor dependencies)
+
+```php
+it('evaluates a pre-configured agent', function () {
+    $agent = new RefundAgent($user);
+
+    expectAgent($agent, 'Can I return a damaged laptop?')
+        ->toContain('refund')
+        ->toPassJudge('Response explains the refund policy clearly');
+});
+```
+
+You can also use Laravel's `::make()` method:
+
+```php
+it('evaluates agent created with make()', function () {
+    expectAgent(RefundAgent::make(user: $user), 'Can I return a damaged laptop?')
+        ->toContain('refund');
+});
+```
+
 ### Closure task (without an Agent class)
 
 ```php
@@ -290,10 +311,10 @@ Use native Pest expectations for deterministic checks — no scorer classes need
 
 ```php
 expectAgent(
-    string|Closure $agent,   // Agent class name or closure
-    string $prompt,          // The input prompt
-    array $fake = [],        // Fake responses (bypasses agent execution)
-    array $attachments = [], // Files to pass to the agent (Document, Image)
+    string|Closure|Agent $agent, // Agent class name, closure, or instance
+    string $prompt,              // The input prompt
+    array $fake = [],            // Fake responses (bypasses agent execution)
+    array $attachments = [],     // Files to pass to the agent (Document, Image)
 ): Expectation
 
 // Chain ->repeat(N) for multiple runs:

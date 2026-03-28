@@ -6,6 +6,7 @@ namespace ShipFastLabs\PestEval\Eval;
 
 use Closure;
 use Illuminate\Container\Container;
+use Laravel\Ai\Contracts\Agent;
 
 final class EvalExpectationContext
 {
@@ -44,7 +45,7 @@ final class EvalExpectationContext
     /**
      * @return list<string>
      */
-    public function resolveOutputs(string|Closure $agent): array
+    public function resolveOutputs(string|Closure|Agent $agent): array
     {
         $this->resolvedTask = $this->resolveTask($agent);
 
@@ -89,7 +90,7 @@ final class EvalExpectationContext
     /**
      * @return Closure(string): string
      */
-    private function resolveTask(string|Closure $agent): Closure
+    private function resolveTask(string|Closure|Agent $agent): Closure
     {
         if ($agent instanceof Closure) {
             return $agent;
@@ -105,6 +106,12 @@ final class EvalExpectationContext
 
                 return $response;
             };
+        }
+
+        if ($agent instanceof Agent) {
+            $attachments = $this->attachments;
+
+            return fn (string $input): string => (string) $agent->prompt($input, $attachments);
         }
 
         $attachments = $this->attachments;

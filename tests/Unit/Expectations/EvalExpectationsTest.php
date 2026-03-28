@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Container\Container;
 use ShipFastLabs\PestEval\Eval\EvalExpectationContext;
 use ShipFastLabs\PestEval\Eval\EvalReport;
+use ShipFastLabs\PestEval\Tests\Fixtures\Agents\InstanceGreetingAgent;
 use ShipFastLabs\PestEval\Tests\Fixtures\Support\ContainerGreeting;
 use ShipFastLabs\PestEval\Tests\Fixtures\Support\ContainerResolvedPromptAgent;
 
@@ -159,6 +160,30 @@ describe('expectAgent with container resolution', function (): void {
 
         expectAgent(ContainerResolvedPromptAgent::class, 'World')
             ->toBe('Hello World');
+    });
+});
+
+describe('expectAgent with agent instance', function (): void {
+    it('runs an agent instance directly without container resolution', function (): void {
+        $agent = new InstanceGreetingAgent(new ContainerGreeting('Hello'));
+
+        expectAgent($agent, 'World')
+            ->toBe('Hello World');
+    });
+
+    it('sets agent name from instance class basename', function (): void {
+        $agent = new InstanceGreetingAgent(new ContainerGreeting('Hi'));
+
+        expectAgent($agent, 'there');
+
+        expect(EvalExpectationContext::$current->agentName)->toBe('InstanceGreetingAgent');
+    });
+
+    it('uses faked responses over agent instance when fake is provided', function (): void {
+        $agent = new InstanceGreetingAgent(new ContainerGreeting('Hello'));
+
+        expectAgent($agent, 'World', fake: ['faked response'])
+            ->toBe('faked response');
     });
 });
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ShipFastLabs\PestEval;
 
 use Closure;
+use Laravel\Ai\Contracts\Agent;
 use Pest\Expectation;
 use ShipFastLabs\PestEval\Eval\EvalExpectationContext;
 use ShipFastLabs\PestEval\Eval\EvalReport;
@@ -22,14 +23,20 @@ use ShipFastLabs\PestEval\Scorers\ToolCallMatch;
  * @param  list<mixed>  $attachments
  */
 function expectAgent(
-    string|Closure $agent,
+    string|Closure|Agent $agent,
     string $prompt,
     array $fake = [],
     array $attachments = [],
 ): mixed {
+    $agentName = match (true) {
+        $agent instanceof Closure => 'Task',
+        $agent instanceof Agent => class_basename($agent),
+        default => class_basename($agent),
+    };
+
     $ctx = new EvalExpectationContext(
         prompt: $prompt,
-        agentName: is_string($agent) ? class_basename($agent) : 'Task',
+        agentName: $agentName,
         fakedResponses: $fake,
         attachments: $attachments,
     );
