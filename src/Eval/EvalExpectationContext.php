@@ -11,6 +11,14 @@ final class EvalExpectationContext
 {
     public static ?self $current = null;
 
+    /**
+     * @var (Closure(string): string)|null
+     */
+    private ?Closure $resolvedTask = null;
+
+    /** @var list<string>|null */
+    private ?array $sampleOutputs = null;
+
     public static function currentPrompt(): string
     {
         return self::$current instanceof self ? self::$current->prompt : '';
@@ -28,7 +36,6 @@ final class EvalExpectationContext
     public function __construct(
         public readonly string $prompt,
         public readonly string $agentName,
-        public readonly int $runs = 1,
         public readonly array $fakedResponses = [],
         public readonly array $attachments = [],
     ) {
@@ -39,15 +46,44 @@ final class EvalExpectationContext
      */
     public function resolveOutputs(string|Closure $agent): array
     {
-        $task = $this->resolveTask($agent);
+        $this->resolvedTask = $this->resolveTask($agent);
 
+        return [($this->resolvedTask)($this->prompt)];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function resolveAdditionalOutputs(int $count): array
+    {
+        if (!$this->resolvedTask instanceof \Closure) {
+            throw new \RuntimeException('resolveOutputs() must be called before resolveAdditionalOutputs().');
+        }
+
+        $task = $this->resolvedTask;
         $outputs = [];
 
-        for ($i = 0; $i < $this->runs; $i++) {
+        for ($i = 0; $i < $count; $i++) {
             $outputs[] = $task($this->prompt);
         }
 
         return $outputs;
+    }
+
+    /**
+     * @param  list<string>  $outputs
+     */
+    public function setSampleOutputs(array $outputs): void
+    {
+        $this->sampleOutputs = $outputs;
+    }
+
+    /**
+     * @return list<string>|null
+     */
+    public function getSampleOutputs(): ?array
+    {
+        return $this->sampleOutputs;
     }
 
     /**

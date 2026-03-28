@@ -55,24 +55,6 @@ describe('expectAgent with faked responses', function (): void {
         )->toBe('Paris');
     });
 
-    it('cycles through multiple faked responses across runs', function (): void {
-        expectAgent(
-            'FakeAgent',
-            'What is the capital?',
-            runs: 3,
-            fake: ['Paris', 'London', 'Berlin'],
-        )->toBeString();
-    });
-
-    it('reuses the last response when runs exceed faked responses', function (): void {
-        expectAgent(
-            'FakeAgent',
-            'What is the capital?',
-            runs: 3,
-            fake: ['Tokyo'],
-        )->toBe('Tokyo');
-    });
-
     it('supports deterministic checks against faked output', function (): void {
         expectAgent(
             'FakeAgent',
@@ -92,23 +74,59 @@ describe('expectAgent with faked responses', function (): void {
     });
 });
 
-describe('expectAgent with multiple runs', function (): void {
-    it('asserts each output independently', function (): void {
+describe('samples', function (): void {
+    it('asserts each sample independently', function (): void {
         expectAgent(
             'FakeAgent',
             'What is the capital?',
-            runs: 3,
             fake: ['Paris', 'Paris', 'Paris'],
-        )->toContain('Paris');
+        )->repeat(3)
+            ->toContain('Paris');
     });
 
-    it('fails if any run does not meet assertion', function (): void {
-        expect(fn () => expectAgent(
+    it('fails if any sample does not meet assertion', function (): void {
+        expect(function (): void {
+            expectAgent(
+                'FakeAgent',
+                'What is the capital?',
+                fake: ['Paris', 'wrong', 'Paris'],
+            )->repeat(3)
+                ->toContain('Paris');
+        })->toThrow(PHPUnit\Framework\ExpectationFailedException::class);
+    });
+
+    it('runs the closure N times', function (): void {
+        $callCount = 0;
+
+        expectAgent(
+            function (string $input) use (&$callCount): string {
+                $callCount++;
+
+                return "response {$callCount}";
+            },
+            'test',
+        )->repeat(3)
+            ->toContain('response');
+
+        expect($callCount)->toBe(3);
+    });
+
+    it('reuses last faked response when samples exceed fakes', function (): void {
+        expectAgent(
             'FakeAgent',
             'What is the capital?',
-            runs: 3,
-            fake: ['Paris', 'wrong', 'Paris'],
-        )->toContain('Paris'))->toThrow(PHPUnit\Framework\ExpectationFailedException::class);
+            fake: ['Tokyo'],
+        )->repeat(3)
+            ->toBe('Tokyo');
+    });
+
+    it('repeat is an alias for samples', function (): void {
+        expectAgent(
+            'FakeAgent',
+            'What is the capital?',
+            fake: ['Paris', 'Paris'],
+        )->repeat(2)
+            ->toBe('Paris');
     });
 });
 
@@ -145,23 +163,7 @@ describe('expectAgent with container resolution', function (): void {
 });
 
 describe('EvalExpectationContext resolveOutputs', function (): void {
-    it('runs closure N times', function (): void {
-        $callCount = 0;
-
-        expectAgent(
-            function (string $input) use (&$callCount): string {
-                $callCount++;
-
-                return "response {$callCount}";
-            },
-            'test',
-            runs: 3,
-        )->toBeString();
-
-        expect($callCount)->toBe(3);
-    });
-
-    it('returns single output for runs=1', function (): void {
+    it('returns single output by default', function (): void {
         expectAgent(
             fn (string $input): string => 'single output',
             'test',

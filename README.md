@@ -100,17 +100,18 @@ it('provides helpful refund info', function () {
 });
 ```
 
-### Multiple runs (statistical robustness)
+### Repeat (statistical robustness)
 
 ```php
 it('consistently provides good advice', function () {
-    expectAgent(SalesCoach::class, 'How do I handle price objections?', runs: 5)
+    expectAgent(SalesCoach::class, 'How do I handle price objections?')
+        ->repeat(5)
         ->toContain('objection')
         ->toPassJudge('Provides actionable sales techniques');
 });
 ```
 
-With `runs: N`, the agent is executed N times. Every assertion must pass on **every** output.
+`->repeat(N)` runs the agent N times. Every assertion must pass on **every** output.
 
 ### Faked mode (fast iteration, no agent API calls)
 
@@ -291,10 +292,12 @@ Use native Pest expectations for deterministic checks — no scorer classes need
 expectAgent(
     string|Closure $agent,   // Agent class name or closure
     string $prompt,          // The input prompt
-    int $runs = 1,           // Number of runs (each assertion checked on every output)
     array $fake = [],        // Fake responses (bypasses agent execution)
     array $attachments = [], // Files to pass to the agent (Document, Image)
-): mixed
+): Expectation
+
+// Chain ->repeat(N) for multiple runs:
+->repeat(5)                  // Run agent 5 times, all assertions checked on every output
 ```
 
 ## Artisan Commands

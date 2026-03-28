@@ -26,7 +26,11 @@ final class Plugin implements AddsOutput, Bootable, HandlesArguments, Terminable
 
     private const string ENV_EVAL_MODE = 'PEST_EVAL_MODE';
 
+    private const string ENV_VERBOSE = 'EVALS_VERBOSE';
+
     private static bool $evalMode = false;
+
+    private static bool $verbose = false;
 
     public static function isEvalMode(): bool
     {
@@ -35,9 +39,16 @@ final class Plugin implements AddsOutput, Bootable, HandlesArguments, Terminable
             || Parallel::getGlobal(self::ENV_EVAL_MODE) === true;
     }
 
+    public static function isVerbose(): bool
+    {
+        return self::$verbose
+            || ($_SERVER[self::ENV_VERBOSE] ?? $_ENV[self::ENV_VERBOSE] ?? null) === 'true';
+    }
+
     public static function resetEvalMode(): void
     {
         self::$evalMode = false;
+        self::$verbose = false;
         unset($_SERVER[self::ENV_EVAL_MODE], $_ENV[self::ENV_EVAL_MODE]);
         putenv(self::ENV_EVAL_MODE);
 
@@ -71,6 +82,11 @@ final class Plugin implements AddsOutput, Bootable, HandlesArguments, Terminable
         Parallel::setGlobal(self::ENV_EVAL_MODE, true);
 
         $filtered = $this->popArgument('--eval', $arguments);
+
+        if ($this->hasArgument('--evals-verbose', $filtered)) {
+            self::$verbose = true;
+            $filtered = $this->popArgument('--evals-verbose', $filtered);
+        }
 
         if ($this->shouldTargetEvalDirectory($filtered)) {
             return $this->pushArgument('tests/Evals', $filtered);

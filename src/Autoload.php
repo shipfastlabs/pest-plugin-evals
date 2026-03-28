@@ -24,14 +24,12 @@ use ShipFastLabs\PestEval\Scorers\ToolCallMatch;
 function expectAgent(
     string|Closure $agent,
     string $prompt,
-    int $runs = 1,
     array $fake = [],
     array $attachments = [],
 ): mixed {
     $ctx = new EvalExpectationContext(
         prompt: $prompt,
         agentName: is_string($agent) ? class_basename($agent) : 'Task',
-        runs: $runs,
         fakedResponses: $fake,
         attachments: $attachments,
     );
@@ -40,31 +38,123 @@ function expectAgent(
 
     $outputs = $ctx->resolveOutputs($agent);
 
-    if (count($outputs) === 1) {
-        return expect($outputs[0]);
+    return expect($outputs[0]);
+}
+
+expect()->extend('repeat', function (int $count): Expectation {
+    /** @var Expectation<string> $this */
+    $ctx = EvalExpectationContext::$current;
+
+    if (! $ctx instanceof EvalExpectationContext) {
+        throw new \RuntimeException('repeat() requires expectAgent() to be called first.');
     }
 
-    return expect($outputs)->each;
+    $additional = $ctx->resolveAdditionalOutputs($count - 1);
+    $ctx->setSampleOutputs([$this->value, ...$additional]);
+
+    return $this;
+});
+
+$hasSamples = fn (mixed $value): bool => is_string($value)
+    && EvalExpectationContext::$current instanceof EvalExpectationContext
+    && EvalExpectationContext::$current->getSampleOutputs() !== null
+    && in_array($value, EvalExpectationContext::$current->getSampleOutputs(), true);
+
+/**
+ * @internal
+ * @return list<string>
+ */
+function currentSamples(): array
+{
+    $ctx = EvalExpectationContext::$current;
+
+    if (! $ctx instanceof EvalExpectationContext) {
+        return [];
+    }
+
+    return $ctx->getSampleOutputs() ?? [];
 }
+
+expect()->intercept('toContain', $hasSamples, function (string $needle): void {
+    foreach (currentSamples() as $i => $output) {
+        \PHPUnit\Framework\Assert::assertStringContainsString($needle, $output, "Sample #".($i + 1)." does not contain '{$needle}'.");
+    }
+});
+
+expect()->intercept('toMatch', $hasSamples, function (string $pattern): void {
+    foreach (currentSamples() as $i => $output) {
+        \PHPUnit\Framework\Assert::assertMatchesRegularExpression($pattern, $output, "Sample #".($i + 1)." does not match '{$pattern}'.");
+    }
+});
+
+expect()->intercept('toBe', $hasSamples, function (mixed $expected): void {
+    foreach (currentSamples() as $i => $output) {
+        \PHPUnit\Framework\Assert::assertSame($expected, $output, "Sample #".($i + 1)." does not match expected.");
+    }
+});
+
+expect()->intercept('toBeJson', $hasSamples, function (): void {
+    foreach (currentSamples() as $i => $output) {
+        \PHPUnit\Framework\Assert::assertJson($output, "Sample #".($i + 1)." is not valid JSON.");
+    }
+});
+
 
 /**
  * @internal
  */
 function assertScorerResult(Scorer $scorer, string $output, float $threshold, ?string $expected = null): void
 {
+    $ctx = EvalExpectationContext::$current;
+    $outputs = ($ctx instanceof EvalExpectationContext ? $ctx->getSampleOutputs() : null) ?? [$output];
     $input = EvalExpectationContext::currentPrompt();
     $agent = EvalExpectationContext::currentAgentName();
 
-    $result = $scorer->score($input, $output, $expected);
+    foreach ($outputs as $sampleOutput) {
+        $result = $scorer->score($input, $sampleOutput, $expected);
 
-    EvalReport::instance()->addScorerResult($agent, $result->scorer, $result->score, $threshold);
+        EvalReport::instance()->addScorerResult($agent, $result->scorer, $result->score, $threshold);
 
-    $scorerName = class_basename($result->scorer);
+        $scorerName = class_basename($result->scorer);
+        $passed = $result->score >= $threshold;
 
-    expect($result->score)->toBeGreaterThanOrEqual(
-        $threshold,
-        "{$scorerName} scored {$result->score} (threshold: {$threshold}). {$result->reasoning}",
-    );
+        if (Plugin::isVerbose()) {
+            $icon = $passed ? '<fg=green>✓ PASS</>' : '<fg=red>✗ FAIL</>';
+            $score = number_format($result->score * 100);
+
+            /** @var \Symfony\Component\Console\Output\OutputInterface $console */
+            $console = \Pest\Support\Container::getInstance()->get(\Symfony\Component\Console\Output\OutputInterface::class);
+
+            $lines = [
+                '',
+                '  <fg=gray>'.str_repeat('─', 60).'</>',
+                "  Assertion: <fg=white>{$scorerName}</> (threshold: {$threshold})",
+                '',
+                "  {$icon}",
+                '',
+                '  <fg=gray>Input:</>',
+                '  <fg=white>"'.mb_strimwidth($input, 0, 120, '...').'"</>',
+                '',
+                '  <fg=gray>Output:</>',
+                '  <fg=white>"'.mb_strimwidth($sampleOutput, 0, 200, '...').'"</>',
+                '',
+                '  <fg=gray>Reasoning:</>',
+                '  <fg=white>"'.$result->reasoning.'"</>',
+                '',
+                "  Score: <fg=white>{$score} / 100</>",
+                '  <fg=gray>'.str_repeat('─', 60).'</>',
+            ];
+
+            foreach ($lines as $line) {
+                $console->writeln($line);
+            }
+        }
+
+        expect($result->score)->toBeGreaterThanOrEqual(
+            $threshold,
+            "{$scorerName} scored {$result->score} (threshold: {$threshold}). {$result->reasoning}",
+        );
+    }
 }
 
 expect()->extend('toBeRelevant', function (float $threshold = 0.7): Expectation {

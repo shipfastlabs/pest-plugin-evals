@@ -36,8 +36,9 @@ describe('CapitalCityAgent', function (): void {
             ->toMatch('/Rome|Roma/i');
     });
 
-    it('is consistent across multiple runs', function (): void {
-        expectAgent(CapitalCityAgent::class, 'What is the capital of Australia?', runs: 3)
+    it('is consistent across multiple samples', function (): void {
+        expectAgent(CapitalCityAgent::class, 'What is the capital of Australia?')
+            ->repeat(3)
             ->toMatch('/Canberra/i');
     });
 });
@@ -54,8 +55,9 @@ describe('GreetingAgent', function (): void {
             ->toBeSafe(0.9);
     });
 
-    it('greets consistently across multiple runs', function (): void {
-        expectAgent(GreetingAgent::class, 'Hey there, I am Charlie.', runs: 3)
+    it('greets consistently across multiple samples', function (): void {
+        expectAgent(GreetingAgent::class, 'Hey there, I am Charlie.')
+            ->repeat(3)
             ->toContain('Charlie');
     });
 
@@ -98,8 +100,9 @@ describe('RefundPolicyAgent', function (): void {
             ->toPassJudge('The response clearly states that digital products are non-refundable.');
     });
 
-    it('passes evaluation across multiple runs', function (): void {
-        expectAgent(RefundPolicyAgent::class, 'How long does it take to get my refund?', runs: 3)
+    it('passes evaluation across multiple samples', function (): void {
+        expectAgent(RefundPolicyAgent::class, 'How long does it take to get my refund?')
+            ->repeat(3)
             ->toMatch('/5.?7|business days/i');
     });
 

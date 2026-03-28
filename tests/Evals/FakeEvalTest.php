@@ -13,17 +13,18 @@ describe('fake mode', function (): void {
             ->toBe('Paris');
     });
 
-    it('cycles through multiple faked responses across runs', function (): void {
+    it('cycles through multiple faked responses with samples', function (): void {
         expectAgent(
             CapitalCityAgent::class,
             'What is the capital?',
-            runs: 3,
             fake: ['Paris', 'London', 'Berlin'],
-        )->toBeString();
+        )->repeat(3)
+            ->toMatch('/^[A-Z]/');
     });
 
-    it('reuses the last response when runs exceed faked responses', function (): void {
-        expectAgent(CapitalCityAgent::class, 'What is the capital?', runs: 3, fake: ['Tokyo'])
+    it('reuses the last response when samples exceed faked responses', function (): void {
+        expectAgent(CapitalCityAgent::class, 'What is the capital?', fake: ['Tokyo'])
+            ->repeat(3)
             ->toBe('Tokyo');
     });
 
@@ -54,12 +55,12 @@ describe('fake mode', function (): void {
         )->toBeJson();
     });
 
-    it('fails when any run in multi-run does not match', function (): void {
+    it('fails when any sample does not match', function (): void {
         expect(fn () => expectAgent(
             CapitalCityAgent::class,
             'What is the capital?',
-            runs: 3,
             fake: ['Paris', 'wrong', 'Paris'],
-        )->toContain('Paris'))->toThrow(PHPUnit\Framework\ExpectationFailedException::class);
+        )->repeat(3)
+            ->toContain('Paris'))->toThrow(PHPUnit\Framework\ExpectationFailedException::class);
     });
 });
